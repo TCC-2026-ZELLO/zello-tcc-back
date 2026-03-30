@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # Serviço do Banco de Dados
+  db-tcc:
+    image: postgres:15-alpine
+    container_name: postgres_container
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: laura
+      POSTGRES_DB: tcc_database
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Serviço da sua API NestJS
+  api-tcc:
+    build: .
+    container_name: nestjs_container
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db-tcc
+    environment:
+      # Note que aqui o HOST é o nome do serviço do banco acima!
+      DB_HOST: db-tcc
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: laura
+      DB_NAME: tcc_database
+
+volumes:
+  pgdata:
