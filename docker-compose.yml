@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Serviço do Banco de Dados
   db-tcc:
     image: postgres:15-alpine
     container_name: postgres_container
@@ -11,7 +10,7 @@ services:
       POSTGRES_PASSWORD: laura
       POSTGRES_DB: tcc_database
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
