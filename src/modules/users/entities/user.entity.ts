@@ -1,3 +1,4 @@
+// src/modules/users/entities/user.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,57 +7,63 @@ import {
   JoinTable,
   CreateDateColumn,
   DeleteDateColumn,
+  OneToOne,
+  OneToMany,
 } from 'typeorm';
-import { Papel } from './papeis.entity';
+import { RefreshToken } from './refresh-token.entity';
+import { Papel } from './role.entity';
+import { Cliente } from './client.entity';
+import { Profissional } from './professional.entity';
+import { Gestor } from './manager.entity';
 
-@Entity('usuarios')
+@Entity('usuario')
 export class Usuario {
-
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar' })
+  @Column()
   nome: string;
 
-  @Column({ type: 'varchar', unique: true })
+  @Column({ unique: true })
   email: string;
 
-  @Column({ type: 'varchar', unique: true, nullable: true, default: null })
-  google_id: string | null;
+  @Column({ name: 'google_id', unique: true, nullable: true })
+  googleId: string;
 
-  @Column({ type: 'varchar', nullable: true, default: null })
-  senha_hash: string | null;
+  @Column({ name: 'password_hash', nullable: true, select: false })
+  passwordHash: string;
 
-  @Column({ type: 'boolean', default: false })
-  termos_aceitos: boolean;
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
 
-  @Column({ type: 'int', default: 0 })
-  no_show_count: number;
+  @Column({ name: 'email_verified_at', type: 'timestamptz', nullable: true })
+  emailVerifiedAt: Date;
 
-  // int — streak de comparecimentos (do diagrama)
-  @Column({ type: 'int', default: 0 })
-  streak_sucesso: number;
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  createdAt: Date;
 
-  // timestamptz — criado automaticamente pelo TypeORM
-  @CreateDateColumn({ type: 'timestamptz' })
-  created_at: Date;
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date;
 
-  // timestamptz nullable — soft-delete (do diagrama)
-  @DeleteDateColumn({ type: 'timestamptz', nullable: true })
-  deleted_at: Date | null;
-
-  // Relação N:N com PAPEIS — TypeORM gera a tabela USUARIO_PAPEIS automaticamente
-  @ManyToMany(() => Papel, (papel) => papel.usuarios, { eager: true })
+  @ManyToMany(() => Papel, (papel) => papel.usuarios)
   @JoinTable({
-    name: 'usuario_papeis',          // nome exato da tabela no seu diagrama
-    joinColumn: {
-      name: 'usuario_id',
-      referencedColumnName: 'id',
-    },
-    inverseJoinColumn: {
-      name: 'papel_id',
-      referencedColumnName: 'id',
-    },
+    name: 'usuario_papel',
+    joinColumn: { name: 'usuario_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'papel_id', referencedColumnName: 'id' },
   })
   papeis: Papel[];
+
+  // Relações de especialização (1:1)
+  @OneToOne(() => Cliente, (cliente) => cliente.usuario)
+  cliente: Cliente;
+
+  @OneToOne(() => Profissional, (profissional) => profissional.usuario)
+  profissional: Profissional;
+
+  @OneToOne(() => Gestor, (gestor) => gestor.usuario)
+  gestor: Gestor;
+
+  // Relação 1:N — Um usuário pode ter vários refresh tokens
+  @OneToMany(() => RefreshToken, (token) => token.usuario)
+  refreshTokens: RefreshToken[];
 }

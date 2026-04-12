@@ -7,10 +7,10 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: laura
+      POSTGRES_PASSWORD: rafael
       POSTGRES_DB: tcc_database
     ports:
-      - "5433:5432"
+      - '5433:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -20,7 +20,7 @@ services:
     container_name: nestjs_container
     restart: always
     ports:
-      - "3000:3000"
+      - '3000:3000'
     depends_on:
       - db-tcc
     environment:
@@ -28,7 +28,7 @@ services:
       DB_HOST: db-tcc
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASS: laura
+      DB_PASS: rafael
       DB_NAME: tcc_database
 
 volumes:
