@@ -1,4 +1,3 @@
-// src/modules/users/entities/user.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -53,7 +52,6 @@ export class Usuario {
   })
   papeis: Papel[];
 
-  // Relações de especialização (1:1)
   @OneToOne(() => Cliente, (cliente) => cliente.usuario)
   cliente: Cliente;
 
@@ -63,7 +61,6 @@ export class Usuario {
   @OneToOne(() => Gestor, (gestor) => gestor.usuario)
   gestor: Gestor;
 
-  // Relação 1:N — Um usuário pode ter vários refresh tokens
   @OneToMany(() => RefreshToken, (token) => token.usuario)
   refreshTokens: RefreshToken[];
 }

@@ -1,4 +1,3 @@
-// src/modules/users/entities/user.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -8,7 +7,6 @@ import {
 } from 'typeorm';
 import { Usuario } from './user.entity';
 
-// Entidade Cliente
 @Entity('cliente')
 export class Cliente {
   @PrimaryGeneratedColumn('uuid')

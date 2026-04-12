@@ -22,7 +22,6 @@ export class PasswordReset {
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt: Date;
 
-  // Relacionamento com Usuario para saber de quem é o pedido de recuperação
   @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'usuario_id' })
   usuario: Usuario;

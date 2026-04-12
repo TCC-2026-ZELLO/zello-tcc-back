@@ -5,8 +5,8 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
-} from 'typeorm'; // Importações obrigatórias do TypeORM
-import { Usuario } from './user.entity'; // Importação da entidade Usuario para a FK
+} from 'typeorm';
+import { Usuario } from './user.entity';
 
 @Entity('refresh_token')
 export class RefreshToken {
@@ -22,8 +22,7 @@ export class RefreshToken {
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt: Date;
 
-  // Relacionamento N:1 — Vários tokens podem pertencer a um usuário
   @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'usuario_id' }) // Define o nome da coluna no banco (FK)
+  @JoinColumn({ name: 'usuario_id' })
   usuario: Usuario;
 }

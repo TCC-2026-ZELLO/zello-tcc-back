@@ -1,4 +1,3 @@
-// src/modules/users/entities/user.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,7 +5,6 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 
-// Entidade Empresa
 @Entity('empresa')
 export class Empresa {
   @PrimaryGeneratedColumn('uuid')

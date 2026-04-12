@@ -1,4 +1,3 @@
-// src/modules/users/entities/user.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -9,7 +8,6 @@ import {
 } from 'typeorm';
 import { Usuario } from './user.entity';
 
-// Entidade Profissional
 @Entity('profissional')
 export class Profissional {
   @PrimaryGeneratedColumn('uuid')
