@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: rafael
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: tcc_database
     ports:
       - '5433:5432'
@@ -30,7 +30,7 @@ services:
       DB_HOST: db-tcc
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASS: rafael
+      DB_PASS: ${DB_PASS}
       DB_NAME: tcc_database
 
 volumes:
