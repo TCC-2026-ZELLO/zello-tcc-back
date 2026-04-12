@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: rafael
+      POSTGRES_PASSWORD: laura
       POSTGRES_DB: tcc_database
     ports:
       - '5433:5432'
@@ -24,11 +24,10 @@ services:
     depends_on:
       - db-tcc
     environment:
-      # Note que aqui o HOST é o nome do serviço do banco acima!
       DB_HOST: db-tcc
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASS: rafael
+      DB_PASS: laura
       DB_NAME: tcc_database
 
 volumes:
