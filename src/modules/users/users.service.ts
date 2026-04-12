@@ -47,7 +47,7 @@ export class UsersService {
     }
 
     const papelPadrao = await this.papeisRepository.findOne({
-      where: { nome: 'gestor' },
+      where: { nome: 'usuario' },
     });
 
     const novoUsuarioGoogle = this.usuariosRepository.create({
