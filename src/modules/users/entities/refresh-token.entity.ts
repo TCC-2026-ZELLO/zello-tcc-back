@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { Usuario } from './user.entity';
 
@@ -13,8 +14,9 @@ export class RefreshToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'hashed_token', type: 'varchar', unique: true })
-  hashedToken: string;
+  @Column({ name: 'token_id', type: 'uuid', unique: true })
+  @Index()
+  tokenId: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

@@ -8,12 +8,18 @@ import {
   DeleteDateColumn,
   OneToOne,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { RefreshToken } from './refresh-token.entity';
 import { Papel } from './role.entity';
 import { Cliente } from './client.entity';
 import { Profissional } from './professional.entity';
 import { Gestor } from './manager.entity';
+
+export enum AuthProvider {
+  LOCAL = 'local',
+  GOOGLE = 'google',
+}
 
 @Entity('usuario')
 export class Usuario {
@@ -43,6 +49,14 @@ export class Usuario {
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
   deletedAt: Date;
+
+  @Column({
+    type: 'enum',
+    enum: AuthProvider,
+    default: AuthProvider.LOCAL,
+  })
+  @Index()
+  provider: AuthProvider;
 
   @ManyToMany(() => Papel, (papel) => papel.usuarios)
   @JoinTable({
