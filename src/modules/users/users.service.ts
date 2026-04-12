@@ -54,6 +54,8 @@ export class UsersService {
       nome,
       email,
       googleId,
+      passwordHash: null,
+      provider: 'GOOGLE',
       papeis: papelPadrao ? [papelPadrao] : [],
     });
 
