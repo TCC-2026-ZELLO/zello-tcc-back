@@ -4,11 +4,23 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+  private static getRequiredEnv(name: string): string {
+    const value = process.env[name];
+
+    if (!value || value.trim() === '') {
+      throw new Error(
+        `Missing required Google OAuth configuration: ${name}`,
+      );
+    }
+
+    return value;
+  }
+
   constructor() {
     super({
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+      clientID: GoogleStrategy.getRequiredEnv('GOOGLE_CLIENT_ID'),
+      clientSecret: GoogleStrategy.getRequiredEnv('GOOGLE_CLIENT_SECRET'),
+      callbackURL: GoogleStrategy.getRequiredEnv('GOOGLE_CALLBACK_URL'),
       scope: ['email', 'profile'],
     });
   }
