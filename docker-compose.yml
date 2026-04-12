@@ -7,27 +7,30 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: laura
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: tcc_database
     ports:
       - '5433:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  # Serviço da sua API NestJS
   api-tcc:
     build: .
     container_name: nestjs_container
+    env_file: .env
     restart: always
     ports:
       - '3000:3000'
     depends_on:
       - db-tcc
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       DB_HOST: db-tcc
       DB_PORT: 5432
       DB_USER: postgres
-      DB_PASS: laura
+      DB_PASS: ${DB_PASS}
       DB_NAME: tcc_database
 
 volumes:
