@@ -5,8 +5,11 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { AuthProvider } from '../users/entities/user.entity';
 import { RefreshToken } from '../users/entities/refresh-token.entity';
+import { PasswordReset } from '../users/entities/password-reset.entity';
+import { ResetPasswordDto } from '../auth/dto/reset-password.dto';
+import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +18,9 @@ export class AuthService {
     private usersService: UsersService,
     @InjectRepository(RefreshToken)
     private refreshTokenRepo: Repository<RefreshToken>,
+    @InjectRepository(PasswordReset)
+    private passwordResetRepo: Repository<PasswordReset>,
+    private readonly mailerService: MailerService,
     private jwtService: JwtService,
   ) {}
 
@@ -131,5 +137,88 @@ export class AuthService {
     const { email, nome, googleId } = googleUser;
     const user = await this.usersService.createViaGoogle(nome, email, googleId);
     return this.generateTokens(user);
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.usersService.findByEmail(email);
+
+    if (!user) {
+      return {
+        message:
+          'Se o e-mail estiver cadastrado, um link de recuperação será enviado.',
+      };
+    }
+
+    await this.passwordResetRepo.delete({ usuario: { id: user.id } });
+
+    const rawToken = randomBytes(32).toString('hex');
+    const hashedToken = createHash('sha256').update(rawToken).digest('hex');
+
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+    await this.passwordResetRepo.save({
+      hashedToken,
+      usuario: { id: user.id },
+      expiresAt,
+    });
+
+    const resetLink = `http://localhost:5173/redefinir-senha#token=${rawToken}`;
+
+    try {
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Recuperação de Senha - Zello',
+        html: `
+        <div style="font-family: sans-serif; color: #333;">
+          <h2>Recuperação de Senha</h2>
+          <p>Olá, ${user.nome}.</p>
+          <p>Você solicitou a redefinição de senha para sua conta no Zello.</p>
+          <p>Clique no botão abaixo para prosseguir. Este link é válido por <strong>15 minutos</strong>.</p>
+          <a href="${resetLink}" 
+             style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+             Redefinir Minha Senha
+          </a>
+          <p>Se você não solicitou isso, ignore este e-mail.</p>
+        </div>
+      `,
+      });
+    } catch (error) {
+      console.error('Falha ao enviar e-mail:', error);
+    }
+
+    return { message: 'Link de recuperação enviado com sucesso.' };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const { token, newPassword } = dto;
+
+    const hashedToken = createHash('sha256').update(token).digest('hex');
+
+    const resetRecord = await this.passwordResetRepo.findOne({
+      where: { hashedToken },
+      relations: ['usuario'],
+    });
+
+    if (!resetRecord) {
+      throw new UnauthorizedException('Token inválido ou já utilizado.');
+    }
+
+    if (resetRecord.expiresAt < new Date()) {
+      await this.passwordResetRepo.delete(resetRecord.id);
+      throw new UnauthorizedException(
+        'Este token expirou. Solicite um novo link.',
+      );
+    }
+
+    await this.usersService.updatePassword(resetRecord.usuario.id, newPassword);
+
+    await this.refreshTokenRepo.delete({
+      usuario: { id: resetRecord.usuario.id },
+    });
+
+    await this.passwordResetRepo.delete(resetRecord.id);
+
+    return { message: 'Senha atualizada com sucesso!' };
   }
 }
