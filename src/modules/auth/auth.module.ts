@@ -9,13 +9,19 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { RefreshToken } from '../users/entities/refresh-token.entity';
 
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET environment variable must be set');
+}
+
 @Module({
   imports: [
     UsersModule,
     PassportModule,
     TypeOrmModule.forFeature([RefreshToken]),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'chave-secreta-zello',
+      secret: jwtSecret,
       signOptions: { expiresIn: '1h' },
     }),
   ],
