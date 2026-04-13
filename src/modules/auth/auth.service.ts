@@ -6,7 +6,7 @@ import { UsersService } from '../users/users.service';
 import { AuthProvider } from '../users/entities/user.entity';
 import { RefreshToken } from '../users/entities/refresh-token.entity';
 import { PasswordReset } from '../users/entities/password-reset.entity';
-import { ResetPasswordDto } from '../auth/dto/reset-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
 import { randomUUID, randomBytes, createHash } from 'crypto';
