@@ -1,20 +1,28 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { AuthProvider } from '../users/entities/user.entity';
 import { RefreshToken } from '../users/entities/refresh-token.entity';
+import { PasswordReset } from '../users/entities/password-reset.entity';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private dataSource: DataSource,
     private usersService: UsersService,
     @InjectRepository(RefreshToken)
     private refreshTokenRepo: Repository<RefreshToken>,
+    @InjectRepository(PasswordReset)
+    private passwordResetRepo: Repository<PasswordReset>,
+    private readonly mailerService: MailerService,
     private jwtService: JwtService,
   ) {}
 
@@ -131,5 +139,124 @@ export class AuthService {
     const { email, nome, googleId } = googleUser;
     const user = await this.usersService.createViaGoogle(nome, email, googleId);
     return this.generateTokens(user);
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\//g, '&#x2F;');
+  }
+
+  async forgotPassword(email: string) {
+    const GENERIC_RESPONSE = {
+      message:
+        'Se o e-mail estiver cadastrado, um link de recuperação será enviado.',
+    };
+
+    const user = await this.usersService.findByEmail(email);
+
+    if (!user || user.provider !== AuthProvider.LOCAL) {
+      return GENERIC_RESPONSE;
+    }
+
+    await this.passwordResetRepo.delete({ usuario: { id: user.id } });
+
+    const rawToken = randomBytes(32).toString('hex');
+    const hashedToken = createHash('sha256').update(rawToken).digest('hex');
+
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+    await this.passwordResetRepo.save({
+      hashedToken,
+      usuario: { id: user.id },
+      expiresAt,
+    });
+
+    const frontendBaseUrl = process.env.FRONTEND_BASE_URL;
+    if (!frontendBaseUrl) {
+      this.logger.error(
+        `FRONTEND_BASE_URL não configurada; e-mail de recuperação não enviado para userId=${user.id}`,
+      );
+      return GENERIC_RESPONSE;
+    }
+
+    const resetUrl = new URL('/redefinir-senha', frontendBaseUrl);
+    resetUrl.hash = `token=${encodeURIComponent(rawToken)}`;
+    const resetLink = resetUrl.toString();
+
+    try {
+      const escapedNome = this.escapeHtml(user.nome);
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Recuperação de Senha - Zello',
+        html: `
+        <div style="font-family: sans-serif; color: #333;">
+          <h2>Recuperação de Senha</h2>
+          <p>Olá, ${escapedNome}.</p>
+          <p>Você solicitou a redefinição de senha para sua conta no Zello.</p>
+          <p>Clique no botão abaixo para prosseguir. Este link é válido por <strong>15 minutos</strong>.</p>
+          <a href="${resetLink}" 
+             style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
+             Redefinir Minha Senha
+          </a>
+          <p>Se você não solicitou isso, ignore este e-mail.</p>
+        </div>
+      `,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Falha ao enviar e-mail de recuperação para userId=${user.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
+    return GENERIC_RESPONSE;
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const { token, newPassword } = dto;
+
+    const hashedToken = createHash('sha256').update(token).digest('hex');
+
+    await this.passwordResetRepo.manager.transaction(async (manager) => {
+      const passwordResetRepo = manager.getRepository(PasswordReset);
+      const refreshTokenRepo = manager.getRepository(RefreshToken);
+
+      const resetRecord = await passwordResetRepo
+        .createQueryBuilder('passwordReset')
+        .setLock('pessimistic_write')
+        .innerJoinAndSelect('passwordReset.usuario', 'usuario')
+        .where('passwordReset.hashedToken = :hashedToken', { hashedToken })
+        .getOne();
+
+      if (!resetRecord) {
+        throw new UnauthorizedException('Token inválido ou já utilizado.');
+      }
+
+      if (resetRecord.expiresAt < new Date()) {
+        await passwordResetRepo.delete(resetRecord.id);
+        throw new UnauthorizedException(
+          'Este token expirou. Solicite um novo link.',
+        );
+      }
+
+      await this.usersService.updatePassword(
+        resetRecord.usuario.id,
+        newPassword,
+        manager,
+      );
+
+      await refreshTokenRepo.delete({
+        usuario: { id: resetRecord.usuario.id },
+      });
+
+      await passwordResetRepo.delete(resetRecord.id);
+    });
+    return { message: 'Senha atualizada com sucesso!' };
   }
 }

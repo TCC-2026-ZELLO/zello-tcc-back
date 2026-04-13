@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Usuario } from './entities/user.entity';
+import { EntityManager, Repository } from 'typeorm';
+import { Usuario, AuthProvider } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Papel } from './entities/role.entity';
@@ -24,6 +24,7 @@ export class UsersService {
       nome: createUserDto.nome,
       email: createUserDto.email,
       passwordHash: hash,
+      provider: AuthProvider.LOCAL,
     });
 
     const usuarioSalvo = await this.usuariosRepository.save(novoUsuario);
@@ -54,8 +55,8 @@ export class UsersService {
       nome,
       email,
       googleId,
-      passwordHash: null,
-      provider: 'GOOGLE',
+      passwordHash: undefined,
+      provider: AuthProvider.GOOGLE,
       papeis: papelPadrao ? [papelPadrao] : [],
     });
 
@@ -111,6 +112,27 @@ export class UsersService {
     await this.usuariosRepository.softDelete(id);
 
     return { message: 'Usuário excluído com sucesso.' };
+  }
+
+  async findByEmail(email: string): Promise<Usuario | null> {
+    return this.usuariosRepository.findOne({
+      where: { email },
+    });
+  }
+
+  async updatePassword(
+    id: string,
+    newPassword: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    if (manager) {
+      await manager.update(Usuario, id, { passwordHash });
+    } else {
+      await this.usuariosRepository.update(id, { passwordHash });
+    }
   }
 
   async findByEmailWithPassword(email: string): Promise<Usuario | null> {
