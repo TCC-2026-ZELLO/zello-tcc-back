@@ -227,7 +227,7 @@ export class AuthService {
       const resetRecord = await passwordResetRepo
         .createQueryBuilder('passwordReset')
         .setLock('pessimistic_write')
-        .leftJoinAndSelect('passwordReset.usuario', 'usuario')
+        .innerJoinAndSelect('passwordReset.usuario', 'usuario')
         .where('passwordReset.hashedToken = :hashedToken', { hashedToken })
         .getOne();
 
@@ -242,7 +242,11 @@ export class AuthService {
         );
       }
 
-      await this.usersService.updatePassword(resetRecord.usuario.id, newPassword);
+      await this.usersService.updatePassword(
+        resetRecord.usuario.id,
+        newPassword,
+        manager,
+      );
 
       await refreshTokenRepo.delete({
         usuario: { id: resetRecord.usuario.id },

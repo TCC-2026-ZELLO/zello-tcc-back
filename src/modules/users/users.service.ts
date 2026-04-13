@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Usuario, AuthProvider } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -120,11 +120,19 @@ export class UsersService {
     });
   }
 
-  async updatePassword(id: string, newPassword: string): Promise<void> {
+  async updatePassword(
+    id: string,
+    newPassword: string,
+    manager?: EntityManager,
+  ): Promise<void> {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
-    await this.usuariosRepository.update(id, { passwordHash });
+    if (manager) {
+      await manager.update(Usuario, id, { passwordHash });
+    } else {
+      await this.usuariosRepository.update(id, { passwordHash });
+    }
   }
 
   async findByEmailWithPassword(email: string): Promise<Usuario | null> {
