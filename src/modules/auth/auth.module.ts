@@ -24,7 +24,7 @@ const mailPass = process.env.MAIL_PASS;
 
 if (!mailHost || !mailPort || !mailUser || !mailPass) {
   throw new Error(
-    'As variáveis de ambiente MAIL_HOST, MAIL_PORT, MAIL_USER e MAIL_PASS devem estar configuradas.',
+    'MAIL_HOST, MAIL_PORT, MAIL_USER and MAIL_PASS environment variables must be set',
   );
 }
 
