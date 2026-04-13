@@ -201,30 +201,36 @@ export class AuthService {
 
     const hashedToken = createHash('sha256').update(token).digest('hex');
 
-    const resetRecord = await this.passwordResetRepo.findOne({
-      where: { hashedToken },
-      relations: ['usuario'],
+    await this.passwordResetRepo.manager.transaction(async (manager) => {
+      const passwordResetRepo = manager.getRepository(PasswordReset);
+      const refreshTokenRepo = manager.getRepository(RefreshToken);
+
+      const resetRecord = await passwordResetRepo
+        .createQueryBuilder('passwordReset')
+        .setLock('pessimistic_write')
+        .leftJoinAndSelect('passwordReset.usuario', 'usuario')
+        .where('passwordReset.hashedToken = :hashedToken', { hashedToken })
+        .getOne();
+
+      if (!resetRecord) {
+        throw new UnauthorizedException('Token inválido ou já utilizado.');
+      }
+
+      if (resetRecord.expiresAt < new Date()) {
+        await passwordResetRepo.delete(resetRecord.id);
+        throw new UnauthorizedException(
+          'Este token expirou. Solicite um novo link.',
+        );
+      }
+
+      await this.usersService.updatePassword(resetRecord.usuario.id, newPassword);
+
+      await refreshTokenRepo.delete({
+        usuario: { id: resetRecord.usuario.id },
+      });
+
+      await passwordResetRepo.delete(resetRecord.id);
     });
-
-    if (!resetRecord) {
-      throw new UnauthorizedException('Token inválido ou já utilizado.');
-    }
-
-    if (resetRecord.expiresAt < new Date()) {
-      await this.passwordResetRepo.delete(resetRecord.id);
-      throw new UnauthorizedException(
-        'Este token expirou. Solicite um novo link.',
-      );
-    }
-
-    await this.usersService.updatePassword(resetRecord.usuario.id, newPassword);
-
-    await this.refreshTokenRepo.delete({
-      usuario: { id: resetRecord.usuario.id },
-    });
-
-    await this.passwordResetRepo.delete(resetRecord.id);
-
     return { message: 'Senha atualizada com sucesso!' };
   }
 }
