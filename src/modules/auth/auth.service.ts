@@ -179,7 +179,10 @@ export class AuthService {
 
     const frontendBaseUrl = process.env.FRONTEND_BASE_URL;
     if (!frontendBaseUrl) {
-      throw new Error('FRONTEND_BASE_URL não configurada.');
+      this.logger.error(
+        `FRONTEND_BASE_URL não configurada; e-mail de recuperação não enviado para userId=${user.id}`,
+      );
+      return GENERIC_RESPONSE;
     }
 
     const resetUrl = new URL('/redefinir-senha', frontendBaseUrl);
