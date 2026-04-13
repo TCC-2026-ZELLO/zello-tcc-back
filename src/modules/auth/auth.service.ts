@@ -163,8 +163,14 @@ export class AuthService {
       expiresAt,
     });
 
-    const resetLink = `http://localhost:5173/redefinir-senha#token=${rawToken}`;
+    const frontendBaseUrl = process.env.FRONTEND_BASE_URL;
+    if (!frontendBaseUrl) {
+      throw new Error('FRONTEND_BASE_URL não configurada.');
+    }
 
+    const resetUrl = new URL('/redefinir-senha', frontendBaseUrl);
+    resetUrl.hash = `token=${encodeURIComponent(rawToken)}`;
+    const resetLink = resetUrl.toString();
     try {
       await this.mailerService.sendMail({
         to: user.email,
