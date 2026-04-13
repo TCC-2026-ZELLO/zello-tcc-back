@@ -49,7 +49,6 @@ describe('Autenticação (E2E)', () => {
 
   // Encerramento seguro das conexões
   afterAll(async () => {
-    if (dataSource) await dataSource.destroy();
     if (app) await app.close();
   });
 
