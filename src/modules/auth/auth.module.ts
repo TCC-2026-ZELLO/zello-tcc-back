@@ -17,6 +17,17 @@ if (!jwtSecret) {
   throw new Error('JWT_SECRET environment variable must be set');
 }
 
+const mailHost = process.env.MAIL_HOST;
+const mailPort = process.env.MAIL_PORT;
+const mailUser = process.env.MAIL_USER;
+const mailPass = process.env.MAIL_PASS;
+
+if (!mailHost || !mailPort || !mailUser || !mailPass) {
+  throw new Error(
+    'As variáveis de ambiente MAIL_HOST, MAIL_PORT, MAIL_USER e MAIL_PASS devem estar configuradas.',
+  );
+}
+
 @Module({
   imports: [
     UsersModule,
@@ -29,12 +40,12 @@ if (!jwtSecret) {
 
     MailerModule.forRoot({
       transport: {
-        host: process.env.MAIL_HOST,
-        port: Number(process.env.MAIL_PORT),
+        host: mailHost,
+        port: Number(mailPort),
         secure: false,
         auth: {
-          user: process.env.MAIL_USER,
-          pass: process.env.MAIL_PASS,
+          user: mailUser,
+          pass: mailPass,
         },
       },
       defaults: {

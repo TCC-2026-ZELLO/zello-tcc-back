@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -13,6 +13,8 @@ import { randomUUID, randomBytes, createHash } from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private dataSource: DataSource,
     private usersService: UsersService,
@@ -204,7 +206,10 @@ export class AuthService {
       `,
       });
     } catch (error) {
-      console.error('Falha ao enviar e-mail:', error);
+      this.logger.error(
+        `Falha ao enviar e-mail de recuperação para userId=${user.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
     }
 
     return GENERIC_RESPONSE;
