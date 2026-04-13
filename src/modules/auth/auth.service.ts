@@ -139,14 +139,26 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\//g, '&#x2F;');
+  }
+
   async forgotPassword(email: string) {
+    const GENERIC_RESPONSE = {
+      message:
+        'Se o e-mail estiver cadastrado, um link de recuperação será enviado.',
+    };
+
     const user = await this.usersService.findByEmail(email);
 
-    if (!user) {
-      return {
-        message:
-          'Se o e-mail estiver cadastrado, um link de recuperação será enviado.',
-      };
+    if (!user || user.provider !== AuthProvider.LOCAL) {
+      return GENERIC_RESPONSE;
     }
 
     await this.passwordResetRepo.delete({ usuario: { id: user.id } });
@@ -171,14 +183,16 @@ export class AuthService {
     const resetUrl = new URL('/redefinir-senha', frontendBaseUrl);
     resetUrl.hash = `token=${encodeURIComponent(rawToken)}`;
     const resetLink = resetUrl.toString();
+
     try {
+      const escapedNome = this.escapeHtml(user.nome);
       await this.mailerService.sendMail({
         to: user.email,
         subject: 'Recuperação de Senha - Zello',
         html: `
         <div style="font-family: sans-serif; color: #333;">
           <h2>Recuperação de Senha</h2>
-          <p>Olá, ${user.nome}.</p>
+          <p>Olá, ${escapedNome}.</p>
           <p>Você solicitou a redefinição de senha para sua conta no Zello.</p>
           <p>Clique no botão abaixo para prosseguir. Este link é válido por <strong>15 minutos</strong>.</p>
           <a href="${resetLink}" 
@@ -193,7 +207,7 @@ export class AuthService {
       console.error('Falha ao enviar e-mail:', error);
     }
 
-    return { message: 'Link de recuperação enviado com sucesso.' };
+    return GENERIC_RESPONSE;
   }
 
   async resetPassword(dto: ResetPasswordDto) {
