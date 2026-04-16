@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { AuthProvider, User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -139,5 +139,27 @@ export class UsersService {
       relations: ['roles'],
       select: ['id', 'name', 'email', 'passwordHash', 'provider', 'roles'],
     });
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    return this.UsersRepository.findOne({
+      where: { email },
+      relations: ['roles'],
+    });
+  }
+
+  async updatePassword(
+    id: string,
+    newPassword: string,
+    manager?: EntityManager,
+  ) {
+    const saltRounds = 10;
+    const hash = await bcrypt.hash(newPassword, saltRounds);
+
+    if (manager) {
+      await manager.update(User, id, { passwordHash: hash });
+    } else {
+      await this.UsersRepository.update(id, { passwordHash: hash });
+    }
   }
 }
