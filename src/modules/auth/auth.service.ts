@@ -163,7 +163,7 @@ export class AuthService {
       return GENERIC_RESPONSE;
     }
 
-    await this.passwordResetRepo.delete({ usuario: { id: user.id } });
+    await this.passwordResetRepo.delete({ user: { id: user.id } });
 
     const rawToken = randomBytes(32).toString('hex');
     const hashedToken = createHash('sha256').update(rawToken).digest('hex');
@@ -173,7 +173,7 @@ export class AuthService {
 
     await this.passwordResetRepo.save({
       hashedToken,
-      usuario: { id: user.id },
+      user: { id: user.id },
       expiresAt,
     });
 
@@ -190,14 +190,14 @@ export class AuthService {
     const resetLink = resetUrl.toString();
 
     try {
-      const escapedNome = this.escapeHtml(user.nome);
+      const escapedname = this.escapeHtml(user.name);
       await this.mailerService.sendMail({
         to: user.email,
         subject: 'Recuperação de Senha - Zello',
         html: `
         <div style="font-family: sans-serif; color: #333;">
           <h2>Recuperação de Senha</h2>
-          <p>Olá, ${escapedNome}.</p>
+          <p>Olá, ${escapedname}.</p>
           <p>Você solicitou a redefinição de senha para sua conta no Zello.</p>
           <p>Clique no botão abaixo para prosseguir. Este link é válido por <strong>15 minutos</strong>.</p>
           <a href="${resetLink}" 
@@ -230,7 +230,7 @@ export class AuthService {
       const resetRecord = await passwordResetRepo
         .createQueryBuilder('passwordReset')
         .setLock('pessimistic_write')
-        .innerJoinAndSelect('passwordReset.usuario', 'usuario')
+        .innerJoinAndSelect('passwordReset.user', 'user')
         .where('passwordReset.hashedToken = :hashedToken', { hashedToken })
         .getOne();
 
@@ -246,13 +246,13 @@ export class AuthService {
       }
 
       await this.usersService.updatePassword(
-        resetRecord.usuario.id,
+        resetRecord.user.id,
         newPassword,
         manager,
       );
 
       await refreshTokenRepo.delete({
-        usuario: { id: resetRecord.usuario.id },
+        user: { id: resetRecord.user.id },
       });
 
       await passwordResetRepo.delete(resetRecord.id);
