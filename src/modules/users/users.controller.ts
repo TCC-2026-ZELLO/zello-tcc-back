@@ -13,11 +13,11 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { LoggersInterceptor } from 'src/common/interceptors/log-interceptor';
-import { SucessInterceptor } from 'src/common/interceptors/success-interceptor';
+import { LoggersInterceptor } from '../../common/interceptors/log-interceptor';
+import { SucessInterceptor } from '../../common/interceptors/success-interceptor';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from 'src/common/decorators/roles.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('users')
 export class UsersController {
