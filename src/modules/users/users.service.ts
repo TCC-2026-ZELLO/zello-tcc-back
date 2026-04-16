@@ -1,123 +1,143 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Usuario } from './entities/user.entity';
+import { AuthProvider, User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { Papel } from './entities/role.entity';
 import * as bcrypt from 'bcrypt';
+import { Role } from './entities/role.entity';
+
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(Usuario)
-    private usuariosRepository: Repository<Usuario>,
+    @InjectRepository(User)
+    private UsersRepository: Repository<User>,
 
-    @InjectRepository(Papel)
-    private papeisRepository: Repository<Papel>,
+    @InjectRepository(Role)
+    private RolesRepository: Repository<Role>,
   ) {}
+
+  async onModuleInit() {
+    await this.seedRoles();
+  }
+
+  private async seedRoles() {
+    const defaultRoles = ['admin', 'professional', 'client', 'manager'];
+
+    for (const roleName of defaultRoles) {
+      const exists = await this.RolesRepository.findOne({
+        where: { name: roleName },
+      });
+
+      if (!exists) {
+        const newRole = this.RolesRepository.create({ name: roleName });
+        await this.RolesRepository.save(newRole);
+        console.log(`[Seed]: Role '${roleName}' criada com sucesso.`);
+      }
+    }
+  }
 
   async create(createUserDto: CreateUserDto) {
     const saltRounds = 10;
     const hash = await bcrypt.hash(createUserDto.password, saltRounds);
 
-    const novoUsuario = this.usuariosRepository.create({
-      nome: createUserDto.nome,
+    const novoUser = this.UsersRepository.create({
+      name: createUserDto.nome,
       email: createUserDto.email,
       passwordHash: hash,
     });
 
-    const usuarioSalvo = await this.usuariosRepository.save(novoUsuario);
+    const UserSalvo = await this.UsersRepository.save(novoUser);
 
-    const { passwordHash, ...userSemSenha } = usuarioSalvo;
-    return userSemSenha;
+    const { passwordHash, ...userWithoutPassword } = UserSalvo;
+    return userWithoutPassword;
   }
 
   async createViaGoogle(nome: string, email: string, googleId: string) {
-    const usuarioExistente = await this.usuariosRepository.findOne({
+    const UserExistente = await this.UsersRepository.findOne({
       where: { email },
-      relations: ['papeis'],
+      relations: ['roles'],
     });
 
-    if (usuarioExistente) {
-      if (!usuarioExistente.googleId) {
-        usuarioExistente.googleId = googleId;
-        await this.usuariosRepository.save(usuarioExistente);
+    if (UserExistente) {
+      if (!UserExistente.googleId) {
+        UserExistente.googleId = googleId;
+        await this.UsersRepository.save(UserExistente);
       }
-      return usuarioExistente;
+      return UserExistente;
     }
 
-    const papelPadrao = await this.papeisRepository.findOne({
-      where: { nome: 'usuario' },
+    const defaultRole = await this.RolesRepository.findOne({
+      where: { name: 'User' },
     });
 
-    const novoUsuarioGoogle = this.usuariosRepository.create({
-      nome,
+    const novoUserGoogle = this.UsersRepository.create({
+      name: nome,
       email,
       googleId,
-      passwordHash: null,
-      provider: 'GOOGLE',
-      papeis: papelPadrao ? [papelPadrao] : [],
+      provider: AuthProvider.GOOGLE,
+      roles: defaultRole ? [defaultRole] : [],
     });
 
-    return await this.usuariosRepository.save(novoUsuarioGoogle);
+    return await this.UsersRepository.save(novoUserGoogle);
   }
 
   async updateGoogleId(id: string, googleId: string) {
-    return await this.usuariosRepository.update(id, { googleId });
+    return await this.UsersRepository.update(id, { googleId });
   }
 
   async findOne(id: string) {
-    const usuario = await this.usuariosRepository.findOne({
+    const User = await this.UsersRepository.findOne({
       where: { id },
-      relations: ['papeis'],
+      relations: ['roles'],
     });
 
-    if (!usuario) {
+    if (!User) {
       throw new NotFoundException(
         'Usuário não encontrado em nossa base de dados.',
       );
     }
 
-    return usuario;
+    return User;
   }
 
   async findAll() {
-    return await this.usuariosRepository.find({
-      relations: ['papeis'],
+    return await this.UsersRepository.find({
+      relations: ['roles'],
     });
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    const usuario = await this.findOne(id);
+    const User = await this.findOne(id);
 
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
-      usuario.passwordHash = updateUserDto.password;
+      User.passwordHash = updateUserDto.password;
     }
 
-    if (updateUserDto.nome) usuario.nome = updateUserDto.nome;
-    if (updateUserDto.email) usuario.email = updateUserDto.email;
+    if (updateUserDto.nome) User.name = updateUserDto.nome;
+    if (updateUserDto.email) User.email = updateUserDto.email;
 
-    const usuarioAtualizado = await this.usuariosRepository.save(usuario);
+    const UserAtualizado = await this.UsersRepository.save(User);
 
-    const { passwordHash, ...userSemSenhaAtualizado } = usuarioAtualizado;
+    const { passwordHash, ...userWithoutPasswordUpdated } = UserAtualizado;
 
-    return userSemSenhaAtualizado;
+    return userWithoutPasswordUpdated;
   }
 
   async remove(id: string) {
     await this.findOne(id);
 
-    await this.usuariosRepository.softDelete(id);
+    await this.UsersRepository.softDelete(id);
 
     return { message: 'Usuário excluído com sucesso.' };
   }
 
-  async findByEmailWithPassword(email: string): Promise<Usuario | null> {
-    return this.usuariosRepository.findOne({
+  async findByEmailWithPassword(email: string): Promise<User | null> {
+    return this.UsersRepository.findOne({
       where: { email },
-      relations: ['papeis'],
-      select: ['id', 'nome', 'email', 'passwordHash', 'provider'],
+      relations: ['roles'],
+      select: ['id', 'name', 'email', 'passwordHash', 'provider', 'roles'],
     });
   }
 }

@@ -31,17 +31,17 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('perfil')
+  @Get('profile')
   getProfile(@Request() req) {
     return {
       message: 'Acesso autorizado!',
-      usuarioLogado: req.user,
+      userLoggedIn: req.user,
     };
   }
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('gestor')
+  @Roles('manager')
   findAll() {
     return this.usersService.findAll();
   }

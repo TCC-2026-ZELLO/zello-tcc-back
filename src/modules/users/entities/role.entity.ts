@@ -1,14 +1,14 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
-import { Usuario } from './user.entity';
+import { User } from './user.entity';
 
-@Entity('papel')
-export class Papel {
+@Entity('role')
+export class Role {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'varchar', unique: true })
-  nome: string;
+  name: string;
 
-  @ManyToMany(() => Usuario, (usuario) => usuario.papeis)
-  usuarios: Usuario[];
+  @ManyToMany(() => User, (user) => user.roles)
+  users: User[];
 }
