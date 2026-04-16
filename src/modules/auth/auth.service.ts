@@ -52,7 +52,7 @@ export class AuthService {
     const accessPayload = {
       sub: user.id,
       email: user.email,
-      roles: user.papeis?.map((p: any) => p.nome) || [],
+      roles: user.roles?.map((p: any) => p.name) || [],
     };
     const accessToken = this.jwtService.sign(accessPayload, {
       expiresIn: '1h',
@@ -67,14 +67,14 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await this.refreshTokenRepo.save({
       tokenId,
-      usuario: { id: user.id },
+      user: { id: user.id },
       expiresAt,
     });
 
     return {
       access_token: accessToken,
       refresh_token: refreshToken,
-      user: { id: user.id, nome: user.nome, email: user.email },
+      user: { id: user.id, name: user.name, email: user.email },
     };
   }
 
@@ -103,11 +103,11 @@ export class AuthService {
       .delete()
       .from(RefreshToken)
       .where('token_id = :tokenId', { tokenId })
-      .andWhere('usuario_id = :userId', { userId })
+      .andWhere('user_id = :userId', { userId })
       .execute();
 
     if (deleteResult.affected === 0) {
-      await this.refreshTokenRepo.delete({ usuario: { id: userId } });
+      await this.refreshTokenRepo.delete({ user: { id: userId } });
       throw new UnauthorizedException(
         'Token já utilizado. Por segurança, todas as sessões foram encerradas.',
       );
@@ -126,18 +126,18 @@ export class AuthService {
   }
 
   async login(user: any) {
-    await this.refreshTokenRepo.delete({ usuario: { id: user.id } });
+    await this.refreshTokenRepo.delete({ user: { id: user.id } });
     return this.generateTokens(user);
   }
 
   async logout(userId: string) {
-    await this.refreshTokenRepo.delete({ usuario: { id: userId } });
+    await this.refreshTokenRepo.delete({ user: { id: userId } });
     return { message: 'Logout realizado com sucesso.' };
   }
 
   async validateGoogleUser(googleUser: any) {
-    const { email, nome, googleId } = googleUser;
-    const user = await this.usersService.createViaGoogle(nome, email, googleId);
+    const { email, name, googleId } = googleUser;
+    const user = await this.usersService.createViaGoogle(name, email, googleId);
     return this.generateTokens(user);
   }
 

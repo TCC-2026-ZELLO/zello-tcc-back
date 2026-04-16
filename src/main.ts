@@ -19,12 +19,12 @@ async function bootstrap() {
   app.use(helmet());
 
   const allowedOrigins = (
-    process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:5173'
+    process.env.CORS_ALLOWED_ORIGINS ??
+    'http://localhost:5173,http://localhost:3000'
   )
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
-
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
