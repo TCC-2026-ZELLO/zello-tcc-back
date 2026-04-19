@@ -24,7 +24,7 @@ services:
     env_file: .env
     restart: always
     ports:
-      - '3001:3001'
+      - '3000:3000'
     depends_on:
       db-tcc:
         condition: service_healthy
