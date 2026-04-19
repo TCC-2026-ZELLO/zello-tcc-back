@@ -20,10 +20,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret: GoogleStrategy.getRequiredEnv('GOOGLE_CLIENT_SECRET'),
       callbackURL: GoogleStrategy.getRequiredEnv('GOOGLE_CALLBACK_URL'),
       scope: ['email', 'profile'],
+      passReqToCallback: true,
     });
   }
 
   async validate(
+    req: any,
     accessToken: string,
     refreshToken: string,
     profile: any,
@@ -35,6 +37,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       email: emails[0].value,
       name: `${name.givenName} ${name.familyName}`,
       accessToken,
+      accountType: req.query.state,
     };
     done(null, user);
   }

@@ -34,9 +34,7 @@ export class AuthService {
     }
 
     if (user.provider === AuthProvider.GOOGLE) {
-      throw new UnauthorizedException(
-        'Esta conta está vinculada ao Google. Use o botão "Entrar com Google".',
-      );
+      throw new UnauthorizedException('E-mail ou senha incorretos.');
     }
 
     const isMatch = await bcrypt.compare(pass, user.passwordHash);
@@ -79,6 +77,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         roles: user.roles?.map((p: any) => p.name) || [],
+        provider: user.provider,
       },
     };
   }
@@ -141,8 +140,13 @@ export class AuthService {
   }
 
   async validateGoogleUser(googleUser: any) {
-    const { email, name, googleId } = googleUser;
-    const user = await this.usersService.createViaGoogle(name, email, googleId);
+    const { email, name, googleId, accountType } = googleUser;
+    const user = await this.usersService.createViaGoogle(
+      name,
+      email,
+      googleId,
+      accountType,
+    );
     return this.generateTokens(user);
   }
 
@@ -191,7 +195,7 @@ export class AuthService {
     }
 
     const resetUrl = new URL('/redefinir-senha', frontendBaseUrl);
-    resetUrl.hash = `token=${encodeURIComponent(rawToken)}`;
+    resetUrl.searchParams.set('token', rawToken);
     const resetLink = resetUrl.toString();
 
     try {
