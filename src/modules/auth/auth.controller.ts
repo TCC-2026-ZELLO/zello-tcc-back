@@ -123,8 +123,28 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // Frontend URL could come from ENV, hardcoded as 3000 for local dev
-    return res.redirect('http://localhost:3000/explore');
+    const redirectUrl =
+      process.env.GOOGLE_REDIRECT_URL ||
+      (process.env.FRONTEND_BASE_URL
+        ? new URL('/explore', process.env.FRONTEND_BASE_URL).toString()
+        : null);
+
+    if (!redirectUrl) {
+      throw new Error(
+        'Missing redirect URL configuration. Set GOOGLE_REDIRECT_URL or FRONTEND_BASE_URL.',
+      );
+    }
+
+    const normalizedRedirectUrl = new URL(redirectUrl);
+
+    if (
+      normalizedRedirectUrl.protocol !== 'http:' &&
+      normalizedRedirectUrl.protocol !== 'https:'
+    ) {
+      throw new Error('Invalid redirect URL protocol.');
+    }
+
+    return res.redirect(normalizedRedirectUrl.toString());
   }
 
   @Post('forgot-password')
