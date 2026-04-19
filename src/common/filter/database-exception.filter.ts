@@ -25,11 +25,27 @@ export class DatabaseExceptionFilter implements ExceptionFilter {
       });
     }
 
-    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: 'Erro interno no banco de dados.',
-      errorDump: exception.message,
+    console.error('DatabaseExceptionFilter:', {
+      message: exception.message,
+      stack: exception.stack,
       path: request.url,
     });
+
+    const errorResponse: {
+      statusCode: number;
+      message: string;
+      path: string;
+      errorDump?: string;
+    } = {
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: 'Erro interno no banco de dados.',
+      path: request.url,
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      errorResponse.errorDump = exception.message;
+    }
+
+    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json(errorResponse);
   }
 }
