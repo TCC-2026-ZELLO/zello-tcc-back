@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { AuthProvider, User } from './entities/user.entity';
@@ -6,6 +6,9 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import { Role } from './entities/role.entity';
+import { Professional } from '../profiles/professionals/entities/professional.entity';
+import { Client } from '../profiles/clients/entities/client.entity';
+import { Manager } from '../profiles/managers/entities/manager.entity';
 
 @Injectable()
 export class UsersService {
@@ -41,16 +44,51 @@ export class UsersService {
     const saltRounds = 10;
     const hash = await bcrypt.hash(createUserDto.password, saltRounds);
 
-    const novoUser = this.UsersRepository.create({
-      name: createUserDto.nome,
-      email: createUserDto.email,
-      passwordHash: hash,
-    });
+    return await this.UsersRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const novoUser = transactionalEntityManager.create(User, {
+          name: createUserDto.nome,
+          email: createUserDto.email,
+          passwordHash: hash,
+        });
 
-    const UserSalvo = await this.UsersRepository.save(novoUser);
+        const roleName =
+          createUserDto.accountType === 'PROFISSIONAL'
+            ? 'professional'
+            : createUserDto.accountType === 'ESTABELECIMENTO'
+              ? 'manager'
+              : 'client';
 
-    const { passwordHash, ...userWithoutPassword } = UserSalvo;
-    return userWithoutPassword;
+        const role = await transactionalEntityManager.findOne(Role, {
+          where: { name: roleName },
+        });
+        if (role) {
+          novoUser.roles = [role];
+        }
+
+        const UserSalvo = await transactionalEntityManager.save(User, novoUser);
+
+        if (createUserDto.accountType === 'PROFISSIONAL') {
+          const perf = transactionalEntityManager.create(Professional, {
+            user: UserSalvo,
+          });
+          await transactionalEntityManager.save(Professional, perf);
+        } else if (createUserDto.accountType === 'CLIENTE') {
+          const perf = transactionalEntityManager.create(Client, {
+            user: UserSalvo,
+          });
+          await transactionalEntityManager.save(Client, perf);
+        } else if (createUserDto.accountType === 'ESTABELECIMENTO') {
+          const perf = transactionalEntityManager.create(Manager, {
+            user: UserSalvo,
+          });
+          await transactionalEntityManager.save(Manager, perf);
+        }
+
+        const { passwordHash, ...userWithoutPassword } = UserSalvo;
+        return userWithoutPassword;
+      },
+    );
   }
 
   async createViaGoogle(nome: string, email: string, googleId: string) {
@@ -67,19 +105,35 @@ export class UsersService {
       return UserExistente;
     }
 
+    const roleName = 'client';
     const defaultRole = await this.RolesRepository.findOne({
-      where: { name: 'User' },
+      where: { name: roleName },
     });
 
-    const novoUserGoogle = this.UsersRepository.create({
-      name: nome,
-      email,
-      googleId,
-      provider: AuthProvider.GOOGLE,
-      roles: defaultRole ? [defaultRole] : [],
-    });
+    return await this.UsersRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const novoUserGoogle = transactionalEntityManager.create(User, {
+          name: nome,
+          email,
+          googleId,
+          provider: AuthProvider.GOOGLE,
+          roles: defaultRole ? [defaultRole] : [],
+        });
 
-    return await this.UsersRepository.save(novoUserGoogle);
+        const UserSalvo = await transactionalEntityManager.save(
+          User,
+          novoUserGoogle,
+        );
+
+        // Criar Perfil Cliente padrão para o Usuário OAuth
+        const perf = transactionalEntityManager.create(Client, {
+          user: UserSalvo,
+        });
+        await transactionalEntityManager.save(Client, perf);
+
+        return UserSalvo;
+      },
+    );
   }
 
   async updateGoogleId(id: string, googleId: string) {
@@ -116,7 +170,13 @@ export class UsersService {
     }
 
     if (updateUserDto.nome) User.name = updateUserDto.nome;
-    if (updateUserDto.email) User.email = updateUserDto.email;
+    if (updateUserDto.email && updateUserDto.email !== User.email) {
+      const existing = await this.findByEmail(updateUserDto.email);
+      if (existing) {
+        throw new ConflictException('E-mail já cadastrado por outro usuário.');
+      }
+      User.email = updateUserDto.email;
+    }
 
     const UserAtualizado = await this.UsersRepository.save(User);
 

@@ -8,9 +8,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const value = process.env[name];
 
     if (!value || value.trim() === '') {
-      throw new Error(
-        `Missing required Google OAuth configuration: ${name}`,
-      );
+      throw new Error(`Missing required Google OAuth configuration: ${name}`);
     }
 
     return value;
@@ -35,7 +33,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const user = {
       googleId: id,
       email: emails[0].value,
-      nome: `${name.givenName} ${name.familyName}`,
+      name: `${name.givenName} ${name.familyName}`,
       accessToken,
     };
     done(null, user);

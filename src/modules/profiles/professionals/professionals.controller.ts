@@ -21,6 +21,8 @@ import { LoggersInterceptor } from '../../../common/interceptors/log-interceptor
 import { SucessInterceptor } from '../../../common/interceptors/success-interceptor';
 
 @Controller('professionals')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('professional', 'admin')
 export class ProfessionalsController {
   constructor(private readonly professionalsService: ProfessionalsService) {}
 

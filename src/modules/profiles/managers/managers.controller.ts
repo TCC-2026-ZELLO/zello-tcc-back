@@ -1,9 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { ManagersService } from './managers.service';
 import { CreateManagerDto } from './dto/create-manager.dto';
 import { UpdateManagerDto } from './dto/update-manager.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
+import { UseGuards } from '@nestjs/common';
 
 @Controller('managers')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('manager', 'admin')
 export class ManagersController {
   constructor(private readonly managersService: ManagersService) {}
 
