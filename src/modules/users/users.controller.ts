@@ -9,6 +9,7 @@ import {
   UseInterceptors,
   UseGuards,
   Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -20,12 +21,11 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller('users')
+@UseInterceptors(LoggersInterceptor, SucessInterceptor)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @UseInterceptors(LoggersInterceptor)
-  @UseInterceptors(SucessInterceptor)
   async create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
@@ -47,23 +47,25 @@ export class UsersController {
   }
 
   @Get(':id')
-  @UseInterceptors(LoggersInterceptor)
-  @UseInterceptors(SucessInterceptor)
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch(':id')
-  @UseInterceptors(LoggersInterceptor)
-  @UseInterceptors(SucessInterceptor)
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  @UseGuards(JwtAuthGuard)
+  update(@Request() req, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    if (req.user.id !== id && !req.user.roles?.includes('admin')) {
+      throw new ForbiddenException('Você não tem permissão para alterar este usuário.');
+    }
     return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(':id')
-  @UseInterceptors(LoggersInterceptor)
-  @UseInterceptors(SucessInterceptor)
-  remove(@Param('id') id: string) {
+  @UseGuards(JwtAuthGuard)
+  remove(@Request() req, @Param('id') id: string) {
+    if (req.user.id !== id && !req.user.roles?.includes('admin')) {
+      throw new ForbiddenException('Você não tem permissão para excluir este usuário.');
+    }
     return this.usersService.remove(id);
   }
 }
