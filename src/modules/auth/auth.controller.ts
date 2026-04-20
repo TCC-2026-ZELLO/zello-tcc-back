@@ -14,6 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
@@ -99,11 +100,11 @@ export class AuthController {
   }
 
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleAuth(@Req() _req) {}
 
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleAuthRedirect(@Req() req, @Res() res) {
     const data = await this.authService.validateGoogleUser(req.user);
 
