@@ -4,9 +4,32 @@ import { ValidationPipe } from '@nestjs/common';
 import { DatabaseExceptionFilter } from './common/filter/database-exception.filter';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { apiReference } from '@scalar/nestjs-api-reference';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const config = new DocumentBuilder()
+    .setTitle('ZELLO API')
+    .setDescription('Documentação interativa do backend do Zello')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .addCookieAuth('acccess_token')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+
+  SwaggerModule.setup('api-json', app, document);
+  
+  app.use(
+    '/docs',
+    apiReference({
+      theme: 'purple',
+      url: '/api-json-json',
+    })
+  );
+
 
   app.use(cookieParser());
   
