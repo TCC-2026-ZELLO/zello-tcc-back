@@ -11,23 +11,23 @@ import {
   Index,
 } from 'typeorm';
 import { RefreshToken } from './refresh-token.entity';
-import { Papel } from './role.entity';
-import { Cliente } from './client.entity';
-import { Profissional } from './professional.entity';
-import { Gestor } from './manager.entity';
+import { Role } from './role.entity';
+import { Manager } from '../../profiles/managers/entities/manager.entity';
+import { Professional } from '../../profiles/professionals/entities/professional.entity';
+import { Client } from '../../profiles/clients/entities/client.entity';
 
 export enum AuthProvider {
   LOCAL = 'local',
   GOOGLE = 'google',
 }
 
-@Entity('usuario')
-export class Usuario {
+@Entity('user')
+export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
-  nome: string;
+  name: string;
 
   @Column({ unique: true })
   email: string;
@@ -58,23 +58,23 @@ export class Usuario {
   @Index()
   provider: AuthProvider;
 
-  @ManyToMany(() => Papel, (papel) => papel.usuarios)
+  @ManyToMany(() => Role, (role) => role.users)
   @JoinTable({
-    name: 'usuario_papel',
-    joinColumn: { name: 'usuario_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'papel_id', referencedColumnName: 'id' },
+    name: 'user_role',
+    joinColumn: { name: 'user_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
   })
-  papeis: Papel[];
+  roles: Role[];
 
-  @OneToOne(() => Cliente, (cliente) => cliente.usuario)
-  cliente: Cliente;
+  @OneToOne(() => Client, (client) => client.user)
+  client: Client;
 
-  @OneToOne(() => Profissional, (profissional) => profissional.usuario)
-  profissional: Profissional;
+  @OneToOne(() => Professional, (professional) => professional.user)
+  professional: Professional;
 
-  @OneToOne(() => Gestor, (gestor) => gestor.usuario)
-  gestor: Gestor;
+  @OneToOne(() => Manager, (manager) => manager.user)
+  manager: Manager;
 
-  @OneToMany(() => RefreshToken, (token) => token.usuario)
+  @OneToMany(() => RefreshToken, (token) => token.user)
   refreshTokens: RefreshToken[];
 }

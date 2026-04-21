@@ -17,7 +17,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: (req) => {
+        let token = null;
+        if (req && req.cookies) {
+          token = req.cookies['access_token'];
+        }
+        return token;
+      },
       ignoreExpiration: false,
       secretOrKey: jwtSecret,
     });
@@ -42,7 +48,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     return {
       ...user,
-      roles: user.papeis?.map((p) => p.nome) || [],
+      roles: user.roles?.map((p) => p.name) || [],
     };
   }
 }

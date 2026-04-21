@@ -34,9 +34,7 @@ export class AuthService {
     }
 
     if (user.provider === AuthProvider.GOOGLE) {
-      throw new UnauthorizedException(
-        'Esta conta está vinculada ao Google. Use o botão "Entrar com Google".',
-      );
+      throw new UnauthorizedException('E-mail ou senha incorretos.');
     }
 
     const isMatch = await bcrypt.compare(pass, user.passwordHash);
@@ -52,7 +50,7 @@ export class AuthService {
     const accessPayload = {
       sub: user.id,
       email: user.email,
-      roles: user.papeis?.map((p: any) => p.nome) || [],
+      roles: user.roles?.map((p: any) => p.name) || [],
     };
     const accessToken = this.jwtService.sign(accessPayload, {
       expiresIn: '1h',
@@ -67,14 +65,20 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await this.refreshTokenRepo.save({
       tokenId,
-      usuario: { id: user.id },
+      user: { id: user.id },
       expiresAt,
     });
 
     return {
       access_token: accessToken,
       refresh_token: refreshToken,
-      user: { id: user.id, nome: user.nome, email: user.email },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        roles: user.roles?.map((p: any) => p.name) || [],
+        provider: user.provider,
+      },
     };
   }
 
@@ -103,11 +107,11 @@ export class AuthService {
       .delete()
       .from(RefreshToken)
       .where('token_id = :tokenId', { tokenId })
-      .andWhere('usuario_id = :userId', { userId })
+      .andWhere('user_id = :userId', { userId })
       .execute();
 
     if (deleteResult.affected === 0) {
-      await this.refreshTokenRepo.delete({ usuario: { id: userId } });
+      await this.refreshTokenRepo.delete({ user: { id: userId } });
       throw new UnauthorizedException(
         'Token já utilizado. Por segurança, todas as sessões foram encerradas.',
       );
@@ -126,18 +130,23 @@ export class AuthService {
   }
 
   async login(user: any) {
-    await this.refreshTokenRepo.delete({ usuario: { id: user.id } });
+    await this.refreshTokenRepo.delete({ user: { id: user.id } });
     return this.generateTokens(user);
   }
 
   async logout(userId: string) {
-    await this.refreshTokenRepo.delete({ usuario: { id: userId } });
+    await this.refreshTokenRepo.delete({ user: { id: userId } });
     return { message: 'Logout realizado com sucesso.' };
   }
 
   async validateGoogleUser(googleUser: any) {
-    const { email, nome, googleId } = googleUser;
-    const user = await this.usersService.createViaGoogle(nome, email, googleId);
+    const { email, name, googleId, accountType } = googleUser;
+    const user = await this.usersService.createViaGoogle(
+      name,
+      email,
+      googleId,
+      accountType,
+    );
     return this.generateTokens(user);
   }
 
@@ -163,7 +172,7 @@ export class AuthService {
       return GENERIC_RESPONSE;
     }
 
-    await this.passwordResetRepo.delete({ usuario: { id: user.id } });
+    await this.passwordResetRepo.delete({ user: { id: user.id } });
 
     const rawToken = randomBytes(32).toString('hex');
     const hashedToken = createHash('sha256').update(rawToken).digest('hex');
@@ -173,7 +182,7 @@ export class AuthService {
 
     await this.passwordResetRepo.save({
       hashedToken,
-      usuario: { id: user.id },
+      user: { id: user.id },
       expiresAt,
     });
 
@@ -186,18 +195,18 @@ export class AuthService {
     }
 
     const resetUrl = new URL('/redefinir-senha', frontendBaseUrl);
-    resetUrl.hash = `token=${encodeURIComponent(rawToken)}`;
+    resetUrl.searchParams.set('token', rawToken);
     const resetLink = resetUrl.toString();
 
     try {
-      const escapedNome = this.escapeHtml(user.nome);
+      const escapedname = this.escapeHtml(user.name);
       await this.mailerService.sendMail({
         to: user.email,
         subject: 'Recuperação de Senha - Zello',
         html: `
         <div style="font-family: sans-serif; color: #333;">
           <h2>Recuperação de Senha</h2>
-          <p>Olá, ${escapedNome}.</p>
+          <p>Olá, ${escapedname}.</p>
           <p>Você solicitou a redefinição de senha para sua conta no Zello.</p>
           <p>Clique no botão abaixo para prosseguir. Este link é válido por <strong>15 minutos</strong>.</p>
           <a href="${resetLink}" 
@@ -230,7 +239,7 @@ export class AuthService {
       const resetRecord = await passwordResetRepo
         .createQueryBuilder('passwordReset')
         .setLock('pessimistic_write')
-        .innerJoinAndSelect('passwordReset.usuario', 'usuario')
+        .innerJoinAndSelect('passwordReset.user', 'user')
         .where('passwordReset.hashedToken = :hashedToken', { hashedToken })
         .getOne();
 
@@ -246,13 +255,13 @@ export class AuthService {
       }
 
       await this.usersService.updatePassword(
-        resetRecord.usuario.id,
+        resetRecord.user.id,
         newPassword,
         manager,
       );
 
       await refreshTokenRepo.delete({
-        usuario: { id: resetRecord.usuario.id },
+        user: { id: resetRecord.user.id },
       });
 
       await passwordResetRepo.delete(resetRecord.id);
