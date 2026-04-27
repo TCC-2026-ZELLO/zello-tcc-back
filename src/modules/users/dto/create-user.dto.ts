@@ -8,7 +8,7 @@ import {
   IsIn,
   IsBoolean,
 } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUserDto {
   @ApiProperty({
@@ -27,7 +27,7 @@ export class CreateUserDto {
   @IsNotEmpty({ message: 'O e-mail é obrigatório.' })
   email!: string;
 
-    @ApiProperty({
+  @ApiProperty({
     description: 'Senha com no mínimo 6 caracteres',
     example: 'senha123',
     minLength: 6,
@@ -41,8 +41,7 @@ export class CreateUserDto {
   })
   password!: string;
 
-  // CA4
-    @ApiProperty({
+  @ApiProperty({
     description: 'Aceite dos termos de uso — deve ser true para prosseguir',
     example: true,
   })

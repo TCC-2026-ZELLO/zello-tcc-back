@@ -22,7 +22,7 @@ export class SearchService {
 
     if (query.q) {
       qb.andWhere(
-        '(user.name ILIKE :search OR professional.biography ILIKE :search)',
+        '(user.name ILIKE :search OR professional.specialty ILIKE :search OR professional.biography ILIKE :search)',
         {
           search: `%${query.q}%`,
         },
@@ -30,42 +30,43 @@ export class SearchService {
     }
 
     if (query.filter === SearchFilter.RATING) {
-      // Placeholder
+      qb.orderBy('user.name', 'ASC');
     }
 
     const professionals = await qb.take(20).getMany();
-    // Placeholder mock
+
     return professionals.map((pro) => ({
       id: pro.id,
-      name: pro.user?.name || 'Professional',
-      specialty: 'Specialist',
-      rating: 4.9,
-      distance: 'A calcular...',
-      price: '$$',
-      bio: pro.user,
+      user: {
+        name: pro.user?.name || 'Profissional',
+      },
+      specialty: pro.specialty || 'Especialista',
+      photoUrl: pro.photoUrl,
+      bannerUrl: pro.bannerUrl,
+      rating: 5.0,
+      price: pro.specialty ? '$$' : '---',
+      city: 'Curitiba',
     }));
   }
 
   async searchBusinesses(query: SearchQueryDto) {
     const qb = this.businessRepo
-      .createQueryBuilder('Business')
-      .where('Business.defaulting = :status', { status: false });
+      .createQueryBuilder('business')
+      .where('business.defaulting = :status', { status: false });
 
     if (query.q) {
-      qb.andWhere('Business.tradeName ILIKE :search', {
+      qb.andWhere('business.tradeName ILIKE :search', {
         search: `%${query.q}%`,
       });
     }
 
-    const Businesss = await qb.take(20).getMany();
+    const businesses = await qb.take(20).getMany();
 
-    return Businesss.map((emp) => ({
+    return businesses.map((emp) => ({
       id: emp.id,
       name: emp.tradeName,
-      specialty: 'Salão Completo',
+      specialty: 'Estabelecimento',
       rating: 4.8,
-      distance: 'A calcular...',
-      price: '$$$',
     }));
   }
 }

@@ -17,7 +17,6 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
-  ApiBody,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -97,12 +96,25 @@ export class UsersController {
     summary: 'Atualizar usuário',
     description: 'Apenas o próprio usuário ou um admin pode atualizar.',
   })
-  @ApiParam({ name: 'id', description: 'UUID do usuário', example: 'a3f1c2d4-...' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do usuário',
+    example: 'a3f1c2d4-...',
+  })
   @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso.' })
-  @ApiResponse({ status: 403, description: 'Sem permissão para alterar este usuário.' })
-  update(@Request() req, @Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  @ApiResponse({
+    status: 403,
+    description: 'Sem permissão para alterar este usuário.',
+  })
+  update(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
     if (req.user.id !== id && !req.user.roles?.includes('admin')) {
-      throw new ForbiddenException('Você não tem permissão para alterar este usuário.');
+      throw new ForbiddenException(
+        'Você não tem permissão para alterar este usuário.',
+      );
     }
     return this.usersService.update(id, updateUserDto);
   }
@@ -115,13 +127,105 @@ export class UsersController {
     summary: 'Remover usuário',
     description: 'Apenas o próprio usuário ou um admin pode remover.',
   })
-  @ApiParam({ name: 'id', description: 'UUID do usuário', example: 'a3f1c2d4-...' })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do usuário',
+    example: 'a3f1c2d4-...',
+  })
   @ApiResponse({ status: 200, description: 'Usuário removido com sucesso.' })
-  @ApiResponse({ status: 403, description: 'Sem permissão para excluir este usuário.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Sem permissão para excluir este usuário.',
+  })
   remove(@Request() req, @Param('id') id: string) {
     if (req.user.id !== id && !req.user.roles?.includes('admin')) {
-      throw new ForbiddenException('Você não tem permissão para excluir este usuário.');
+      throw new ForbiddenException(
+        'Você não tem permissão para excluir este usuário.',
+      );
     }
     return this.usersService.remove(id);
+  }
+
+  @Post(':id/append-client')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({
+    summary: 'Adiciona um perfil de cliente para um usuário específico',
+    description:
+      'Rota pública para vincular perfil de cliente a um ID de usuário existente.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do usuário',
+    example: 'uuid-aqui',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Perfil de cliente criado com sucesso.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'O usuário já possui um perfil de cliente vinculado.',
+  })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
+  @ApiResponse({ status: 400, description: 'ID de usuário inválido.' })
+  async append_client(@Param('id') id: string) {
+    return this.usersService.appendClient(id);
+  }
+
+  @Post(':id/append-professional')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({
+    summary: 'Adiciona um perfil de profissional para um usuário específico',
+    description:
+      'Rota pública para vincular perfil de profissional a um ID de usuário existente.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do usuário',
+    example: 'uuid-aqui',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Perfil de profissional criado com sucesso.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'O usuário já possui um perfil de profissional vinculado.',
+  })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
+  @ApiResponse({ status: 400, description: 'ID de usuário inválido.' })
+  async append_professional(@Param('id') id: string) {
+    return this.usersService.appendProfessional(id);
+  }
+
+  @Post(':id/append-manager')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({
+    summary: 'Adiciona um perfil de gerente para um usuário específico',
+    description:
+      'Rota pública para vincular perfil de gerente a um ID de usuário existente.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do usuário',
+    example: 'uuid-aqui',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Perfil de gerente criado com sucesso.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'O usuário já possui um perfil de gerente vinculado.',
+  })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
+  @ApiResponse({ status: 400, description: 'ID de usuário inválido.' })
+  async append_manager(@Param('id') id: string) {
+    return this.usersService.appendManager(id);
+  }
+
+  @Patch(':id/promote-to-admin')
+  async promoteToAdmin(@Param('id') id: string) {
+    return await this.usersService.become_admin(id);
   }
 }

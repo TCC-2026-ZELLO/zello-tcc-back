@@ -1,26 +1,57 @@
-import { Injectable } from '@nestjs/common';
-import { CreateClientDto } from './dto/create-client.dto';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Client } from './entities/client.entity';
 import { UpdateClientDto } from './dto/update-client.dto';
 
 @Injectable()
 export class ClientsService {
-  create(createClientDto: CreateClientDto) {
-    return 'This action adds a new client';
+  constructor(
+    @InjectRepository(Client)
+    private readonly clientRepo: Repository<Client>,
+  ) {}
+
+  create() {
+    throw new BadRequestException(
+      'A criação de perfis de cliente deve ser feita através da criação de um Usuário com a role "client".',
+    );
   }
 
-  findAll() {
-    return `This action returns all clients`;
+  async findAll() {
+    return await this.clientRepo.find({
+      relations: ['user'],
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} client`;
+  async findOne(id: string) {
+    const client = await this.clientRepo.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!client) {
+      throw new NotFoundException(
+        `Perfil de cliente com ID "${id}" não encontrado.`,
+      );
+    }
+
+    return client;
   }
 
-  update(id: number, updateClientDto: UpdateClientDto) {
-    return `This action updates a #${id} client`;
+  async update(id: string, updateClientDto: UpdateClientDto) {
+    const client = await this.findOne(id);
+    this.clientRepo.merge(client, updateClientDto);
+
+    return await this.clientRepo.save(client);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} client`;
+  async remove(id: string) {
+    const client = await this.findOne(id);
+    await this.clientRepo.remove(client);
+    return { message: 'Perfil de cliente removido com sucesso.' };
   }
 }

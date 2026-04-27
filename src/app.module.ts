@@ -17,6 +17,10 @@ import { AvailabilityModule } from './modules/availability/availability.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { MediaModule } from './modules/media/media.module';
+import { BusinessProfessionalsModule } from './modules/business-professionals/business-professionals.module';
+import { BusinessManagersModule } from './modules/business-managers/business-managers.module';
+import { FilesModule } from './modules/files/files.module';
+import { FilesService } from './modules/files/files.service';
 
 @Module({
   imports: [
@@ -43,8 +47,8 @@ import { MediaModule } from './modules/media/media.module';
 
     ThrottlerModule.forRoot([
       {
-        ttl: 60000, // milissegundos = 60 segundos)
-        limit: 10,
+        ttl: 60000,
+        limit: 9999999,
       },
     ]),
 
@@ -60,6 +64,11 @@ import { MediaModule } from './modules/media/media.module';
     AppointmentsModule,
     ReviewsModule,
     MediaModule,
+    BusinessProfessionalsModule,
+    BusinessManagersModule,
+    BusinessProfessionalsModule,
+    BusinessManagersModule,
+    FilesModule,
   ],
   controllers: [AppController],
   providers: [
@@ -68,6 +77,7 @@ import { MediaModule } from './modules/media/media.module';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    FilesService,
   ],
 })
 export class AppModule {}
