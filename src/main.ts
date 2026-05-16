@@ -6,9 +6,11 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const config = new DocumentBuilder()
     .setTitle('ZELLO API')
@@ -21,18 +23,17 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
 
   SwaggerModule.setup('api-json', app, document);
-  
+
   app.use(
     '/docs',
     apiReference({
       theme: 'purple',
       url: '/api-json-json',
-    })
+    }),
   );
 
-
   app.use(cookieParser());
-  
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -42,7 +43,15 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new DatabaseExceptionFilter());
-  app.use(helmet());
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: false,
+    }),
+  );
+
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   const allowedOrigins = (
     process.env.CORS_ALLOWED_ORIGINS ??

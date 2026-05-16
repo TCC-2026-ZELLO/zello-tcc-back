@@ -6,7 +6,7 @@ describe('ResetPasswordDto', () => {
   it('deve falhar se a senha não seguir o padrão de segurança', async () => {
     const dtoObj = {
       token: 'token-valido',
-      newPassword: '123', // Senha fraca
+      newPassword: '123',
     };
 
     const ofDto = plainToInstance(ResetPasswordDto, dtoObj);
@@ -14,7 +14,6 @@ describe('ResetPasswordDto', () => {
 
     expect(errors.length).toBeGreaterThan(0);
 
-    // CORREÇÃO: Ajustado para bater com a mensagem real do DTO
     const matchesError = errors.find((e) => e.property === 'newPassword')
       ?.constraints?.matches;
     expect(matchesError).toContain(

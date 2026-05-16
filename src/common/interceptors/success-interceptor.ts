@@ -8,7 +8,6 @@ import {
 import { Observable, map } from 'rxjs';
 
 @Injectable()
-//essa classe é disparada sempre que uma requisição der 200
 export class SucessInterceptor implements NestInterceptor {
   intercept(
     context: ExecutionContext,

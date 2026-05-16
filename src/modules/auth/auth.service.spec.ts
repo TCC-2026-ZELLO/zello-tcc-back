@@ -17,9 +17,6 @@ describe('AuthService', () => {
   let mailerService: MailerService;
   let refreshTokenRepo: any;
 
-  // FIX 1: provider é obrigatório — sem ele, forgotPassword retorna cedo
-  // antes de chamar save() ou sendMail() porque o guard é:
-  // if (!user || user.provider !== AuthProvider.LOCAL) return GENERIC_RESPONSE
   const mockUser = {
     id: 'uuid-1',
     email: 'teste@zello.com',
@@ -27,7 +24,6 @@ describe('AuthService', () => {
     provider: AuthProvider.LOCAL,
   };
 
-  // QueryBuilder encadeável — getOne() configurado em cada teste
   const queryBuilderMock = {
     setLock: jest.fn().mockReturnThis(),
     innerJoinAndSelect: jest.fn().mockReturnThis(),
@@ -35,8 +31,6 @@ describe('AuthService', () => {
     getOne: jest.fn(),
   };
 
-  // FIX 2: o service chama this.passwordResetRepo.manager.transaction(...)
-  // O mock do repositório precisa expor .manager.transaction — não o DataSource
   const passwordResetRepoMock = {
     save: jest.fn().mockResolvedValue({}),
     delete: jest.fn().mockResolvedValue({ affected: 1 }),
@@ -83,7 +77,6 @@ describe('AuthService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    // Restaura encadeamento após clearAllMocks
     queryBuilderMock.setLock.mockReturnThis();
     queryBuilderMock.innerJoinAndSelect.mockReturnThis();
     queryBuilderMock.where.mockReturnThis();
@@ -135,8 +128,6 @@ describe('AuthService', () => {
     refreshTokenRepo = module.get(getRepositoryToken(RefreshToken));
   });
 
-  // ─── forgotPassword ───────────────────────────────────────────────────────
-
   describe('forgotPassword', () => {
     beforeEach(() => {
       process.env.FRONTEND_BASE_URL = 'http://localhost:4200';
@@ -177,8 +168,6 @@ describe('AuthService', () => {
     });
   });
 
-  // ─── resetPassword ────────────────────────────────────────────────────────
-
   describe('resetPassword', () => {
     it('deve lançar UnauthorizedException se o token não existir no banco', async () => {
       queryBuilderMock.getOne.mockResolvedValue(null);
@@ -199,7 +188,7 @@ describe('AuthService', () => {
         id: 'reset-id-1',
         hashedToken,
         usuario: mockUser,
-        expiresAt: new Date(Date.now() - 1000), // já expirou
+        expiresAt: new Date(Date.now() - 1000),
       });
 
       await expect(
@@ -223,7 +212,6 @@ describe('AuthService', () => {
         newPassword: 'NovaSenha@123',
       });
 
-      // O service passa manager como 3º argumento (opcional) — usamos expect.anything()
       expect(usersService.updatePassword).toHaveBeenCalledWith(
         mockUser.id,
         'NovaSenha@123',
@@ -252,8 +240,6 @@ describe('AuthService', () => {
     });
   });
 
-  // ─── login ────────────────────────────────────────────────────────────────
-
   describe('login', () => {
     it('deve apagar sessões anteriores e gerar novos tokens', async () => {
       const user = { ...mockUser, papeis: [] };
@@ -266,8 +252,6 @@ describe('AuthService', () => {
       expect(refreshTokenRepo.save).toHaveBeenCalled();
     });
   });
-
-  // ─── logout ───────────────────────────────────────────────────────────────
 
   describe('logout', () => {
     it('deve deletar todos os refresh tokens e retornar mensagem de sucesso', async () => {
