@@ -6,6 +6,8 @@ import {
   Query,
   UseGuards,
   Req,
+  Param,
+  Delete,
 } from '@nestjs/common';
 import { AvailabilityService } from './availability.service';
 import { CreateBusinessOperatingHourDto } from './dto/create-business-operating-hour.dto';
@@ -38,8 +40,27 @@ export class AvailabilityController {
 
   @Post('exceptions')
   @Roles('manager', 'professional', 'admin')
-  createException(@Body() dto: CreateScheduleExceptionDto) {
-    return this.availabilityService.createException(dto);
+  createException(
+    @Req() req: { user: ActiveUser },
+    @Body() dto: CreateScheduleExceptionDto,
+  ) {
+    return this.availabilityService.createException(dto, req.user);
+  }
+
+  @Get('exceptions')
+  @Roles('manager', 'professional', 'admin')
+  getExceptions(
+    @Query('professionalId') professionalId?: string,
+    @Query('businessId') businessId?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.availabilityService.getExceptions(professionalId, businessId, date);
+  }
+
+  @Delete('exceptions/:id')
+  @Roles('manager', 'professional', 'admin')
+  deleteException(@Req() req: { user: ActiveUser }, @Param('id') id: string) {
+    return this.availabilityService.deleteException(id, req.user);
   }
 
   @Get('bounds')

@@ -25,6 +25,9 @@ export class ScheduleException {
   @Column('text')
   reason: string;
 
+  @Column('uuid', { nullable: true })
+  seriesId: string;
+
   @ManyToOne(() => Business, { nullable: true })
   @JoinColumn({ name: 'business_id' })
   business: Business;

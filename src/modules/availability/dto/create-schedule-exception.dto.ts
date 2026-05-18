@@ -1,9 +1,18 @@
 import { IsString, IsOptional, IsUUID, Matches } from 'class-validator';
 
 export class CreateScheduleExceptionDto {
+  @IsOptional()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Data deve ser YYYY-MM-DD' })
-  date: string;
+  date?: string;
+
+  @IsOptional()
+  @IsString({ each: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    each: true,
+    message: 'Datas devem ser YYYY-MM-DD',
+  })
+  dates?: string[];
 
   @IsOptional()
   @IsString()
@@ -19,10 +28,16 @@ export class CreateScheduleExceptionDto {
   reason: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   businessId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   professionalId?: string;
+
+  @IsOptional()
+  skipConflicts?: boolean;
+
+  @IsOptional()
+  forceOverwritePending?: boolean;
 }

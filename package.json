@@ -39,6 +39,7 @@
     "firebase": "^12.12.1",
     "firebase-admin": "^13.8.0",
     "helmet": "^8.1.0",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^8.0.5",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

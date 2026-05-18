@@ -5,8 +5,8 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Appointment } from './entities/appointment.entity';
+import { Repository, In } from 'typeorm';
+import { Appointment, AppointmentStatus } from './entities/appointment.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { CatalogService } from '../catalog/catalog.service';
 import { AvailabilityService } from '../availability/availability.service';
@@ -61,23 +61,27 @@ export class AppointmentsService {
       professional: { id: dto.professionalId },
       business: { id: dto.businessId },
       service: { id: dto.serviceId },
-      status: 'SCHEDULED',
+      status: 'CONFIRMED',
     });
-
     return await this.appointmentRepo.save(appointment);
   }
 
   async getBusySlotsByDate(
-    professionalId: string,
+    professionalId: string | null,
     date: string,
+    statuses: AppointmentStatus[] = ['CONFIRMED'],
+    businessId?: string,
   ): Promise<Appointment[]> {
+    const where: import('typeorm').FindOptionsWhere<Appointment> = {
+      date: date,
+      status: In(statuses),
+    };
+    if (professionalId) where.professional = { id: professionalId };
+    if (businessId) where.business = { id: businessId };
+
     return await this.appointmentRepo.find({
-      where: {
-        professional: { id: professionalId },
-        date: date,
-        status: 'SCHEDULED',
-      },
-      select: ['startTime', 'endTime'],
+      where,
+      select: ['id', 'startTime', 'endTime', 'status'],
     });
   }
 
@@ -92,5 +96,9 @@ export class AppointmentsService {
       .padStart(2, '0');
     const m = (mins % 60).toString().padStart(2, '0');
     return `${h}:${m}`;
+  }
+
+  async cancelAppointment(id: string): Promise<void> {
+    await this.appointmentRepo.update(id, { status: 'CANCELLED' });
   }
 }
