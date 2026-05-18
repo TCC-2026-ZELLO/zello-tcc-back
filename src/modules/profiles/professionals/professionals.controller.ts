@@ -77,10 +77,7 @@ export class ProfessionalsController {
     @Req() req: { user: ActiveUser },
     @UploadedFile() file: any,
   ) {
-    const imageUrl = this.filesService.uploadPublicFile(
-      file,
-      'portfolios',
-    );
+    const imageUrl = this.filesService.uploadPublicFile(file, 'portfolios');
     return this.professionalsService.addPortfolioImage(req.user.id, imageUrl);
   }
 

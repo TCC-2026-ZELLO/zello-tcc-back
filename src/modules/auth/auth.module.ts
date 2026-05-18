@@ -42,7 +42,9 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
         const mailUser = configService.get<string>('MAIL_USER');
         const mailPass = configService.get<string>('MAIL_PASS');
         const mailSecureStr = configService.get<string>('MAIL_SECURE');
-        const mailFrom = configService.get<string>('MAIL_FROM') || '"Zello Suporte" <suporte@zello.com>';
+        const mailFrom =
+          configService.get<string>('MAIL_FROM') ||
+          '"Zello Suporte" <suporte@zello.com>';
 
         if (!mailHost || !mailPort || !mailUser || !mailPass) {
           throw new Error(
@@ -52,8 +54,8 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
 
         // Se MAIL_SECURE estiver definido, usa o valor booleano correspondente.
         // Caso contrário, usa secure: true para porta 465 (SMTPS) e false para as demais (STARTTLS).
-        const isSecure = mailSecureStr 
-          ? mailSecureStr === 'true' 
+        const isSecure = mailSecureStr
+          ? mailSecureStr === 'true'
           : Number(mailPort) === 465;
 
         return {

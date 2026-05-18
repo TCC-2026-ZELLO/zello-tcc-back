@@ -11,7 +11,9 @@ describe('BusinessProfessionalsController', () => {
       providers: [BusinessProfessionalsService],
     }).compile();
 
-    controller = module.get<BusinessProfessionalsController>(BusinessProfessionalsController);
+    controller = module.get<BusinessProfessionalsController>(
+      BusinessProfessionalsController,
+    );
   });
 
   it('should be defined', () => {

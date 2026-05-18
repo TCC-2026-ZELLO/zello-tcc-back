@@ -7,6 +7,7 @@ import { ProfessionalShift } from './entities/professional-shift.entity';
 import { ScheduleException } from './entities/schedule-exception.entity';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
+import { Professional } from '../profiles/professionals/entities/professional.entity';
 import { CatalogModule } from '../catalog/catalog.module';
 import { AppointmentsModule } from '../appointments/appointments.module';
 
@@ -18,6 +19,7 @@ import { AppointmentsModule } from '../appointments/appointments.module';
       ScheduleException,
       BusinessManager,
       Manager,
+      Professional,
     ]),
     CatalogModule,
     AppointmentsModule,

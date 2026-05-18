@@ -58,7 +58,7 @@ export class AuthController {
     res.clearCookie('refresh_token', { path: '/' });
 
     if (req.user && req.user.id) {
-       await this.authService.logout(req.user.id);
+      await this.authService.logout(req.user.id);
     }
     return { message: 'Logged out successfully' };
   }
