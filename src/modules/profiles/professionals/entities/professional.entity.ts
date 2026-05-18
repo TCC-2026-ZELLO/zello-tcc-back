@@ -10,6 +10,7 @@ import {
 import { User } from '../../../users/entities/user.entity';
 import { BusinessProfessional } from '../../../business-professionals/entities/business-professional.entity';
 import { PortfolioImage } from './portfolio-image.entity';
+import { Qualification } from './qualification.entity';
 
 @Entity('professional')
 export class Professional {
@@ -45,4 +46,7 @@ export class Professional {
   profileComplete: boolean;
   @OneToMany(() => PortfolioImage, (pi) => pi.professional)
   portfolioImages: PortfolioImage[];
+
+  @OneToMany(() => Qualification, (q) => q.professional)
+  qualifications: Qualification[];
 }
