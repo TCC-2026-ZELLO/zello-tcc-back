@@ -55,7 +55,7 @@ async function bootstrap() {
 
   const allowedOrigins = (
     process.env.CORS_ALLOWED_ORIGINS ??
-    'http://localhost:5173,http://localhost:3000'
+    'http://localhost:5173,http://localhost:3000,http://localhost:4000'
   )
     .split(',')
     .map((origin) => origin.trim())
@@ -71,6 +71,6 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3001);
 }
 bootstrap();
