@@ -7,6 +7,7 @@ import { User } from '../../users/entities/user.entity';
 import { PortfolioImage } from './entities/portfolio-image.entity';
 import { Qualification } from './entities/qualification.entity';
 import { CreateQualificationDto } from './dto/create-qualification.dto';
+import { UpdateQualificationDto } from './dto/update-qualification.dto';
 import { BusinessProfessionalService } from '../../business-professionals/entities/business-professional-service.entity';
 import { FilesService } from '../../files/files.service';
 
@@ -153,6 +154,36 @@ export class ProfessionalsService {
       certificateUrl,
       professional,
     });
+
+    return await this.qualificationRepo.save(qualification);
+  }
+
+  async updateQualification(
+    userId: string,
+    qualificationId: string,
+    dto: UpdateQualificationDto,
+    newCertificateUrl?: string,
+  ) {
+    const professional = await this.professionalRepo.findOne({
+      where: { user: { id: userId } },
+    });
+    if (!professional) throw new NotFoundException('Perfil não encontrado');
+
+    const qualification = await this.qualificationRepo.findOne({
+      where: { id: qualificationId, professional: { id: professional.id } },
+    });
+    if (!qualification)
+      throw new NotFoundException('Qualificação não encontrada');
+
+    if (dto.title !== undefined) qualification.title = dto.title;
+    if (dto.institution !== undefined) qualification.institution = dto.institution;
+    if (dto.type !== undefined) qualification.type = dto.type;
+    if (dto.year !== undefined) qualification.year = dto.year;
+
+    if (newCertificateUrl) {
+      this.filesService.deleteFile(qualification.certificateUrl);
+      qualification.certificateUrl = newCertificateUrl;
+    }
 
     return await this.qualificationRepo.save(qualification);
   }
