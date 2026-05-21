@@ -16,6 +16,7 @@ import {
 import { ProfessionalsService } from './professionals.service';
 import { UpdateProfessionalProfileDto } from './dto/update-professional-profile.dto';
 import { CreateQualificationDto } from './dto/create-qualification.dto';
+import { UpdateQualificationDto } from './dto/update-qualification.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -138,6 +139,28 @@ export class ProfessionalsController {
       req.user.id,
       dto,
       certificateUrl,
+    );
+  }
+
+  @Patch('me/qualifications/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('professional', 'manager')
+  @UseInterceptors(FileInterceptor('file', QUALIFICATION_FILE_OPTIONS))
+  @ApiOperation({ summary: 'Editar qualificação do perfil (RF9)' })
+  async updateQualification(
+    @Req() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UpdateQualificationDto,
+  ) {
+    const newCertificateUrl = file
+      ? this.filesService.uploadPublicFile(file, 'qualifications')
+      : undefined;
+    return this.professionalsService.updateQualification(
+      req.user.id,
+      id,
+      dto,
+      newCertificateUrl,
     );
   }
 
