@@ -51,7 +51,7 @@ export class BusinessesController {
     @UploadedFile() file: any,
   ) {
     const url = this.filesService.uploadPublicFile(file, 'business-photos');
-    return this.businessesService.updatePhoto(id, req.user.id, url);
+    return this.businessesService.updatePhoto(id, req.user.id, await url);
   }
 
   @Post(':id/banner')
@@ -63,7 +63,7 @@ export class BusinessesController {
     @UploadedFile() file: any,
   ) {
     const url = this.filesService.uploadPublicFile(file, 'business-banners');
-    return this.businessesService.updateBanner(id, req.user.id, url);
+    return this.businessesService.updateBanner(id, req.user.id, await url);
   }
 
   @Post(':id/gallery')
@@ -75,7 +75,7 @@ export class BusinessesController {
     @UploadedFile() file: any,
   ) {
     const url = this.filesService.uploadPublicFile(file, 'business-gallery');
-    return this.businessesService.addGalleryImage(id, req.user.id, url);
+    return this.businessesService.addGalleryImage(id, req.user.id, await url);
   }
 
   @Delete(':id/gallery/:imageId')

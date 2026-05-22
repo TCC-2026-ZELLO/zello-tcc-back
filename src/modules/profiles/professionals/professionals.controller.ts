@@ -32,7 +32,12 @@ const QUALIFICATION_FILE_OPTIONS = {
   storage: memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
   fileFilter: (_req: any, file: Express.Multer.File, cb: any) => {
-    const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    const ALLOWED_MIMES = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+    ];
     if (ALLOWED_MIMES.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -76,7 +81,7 @@ export class ProfessionalsController {
     @UploadedFile() file: any,
   ) {
     const url = this.filesService.uploadPublicFile(file, 'avatars');
-    return this.professionalsService.updateAvatar(req.user.id, url);
+    return this.professionalsService.updateAvatar(req.user.id, await url);
   }
 
   @Post('me/banner')
@@ -88,7 +93,7 @@ export class ProfessionalsController {
     @UploadedFile() file: any,
   ) {
     const url = this.filesService.uploadPublicFile(file, 'banners');
-    return this.professionalsService.updateBanner(req.user.id, url);
+    return this.professionalsService.updateBanner(req.user.id, await url);
   }
 
   @Post('me/portfolio')
@@ -100,7 +105,10 @@ export class ProfessionalsController {
     @UploadedFile() file: any,
   ) {
     const imageUrl = this.filesService.uploadPublicFile(file, 'portfolios');
-    return this.professionalsService.addPortfolioImage(req.user.id, imageUrl);
+    return this.professionalsService.addPortfolioImage(
+      req.user.id,
+      await imageUrl,
+    );
   }
 
   @Delete('me/portfolio/:id')
@@ -138,7 +146,7 @@ export class ProfessionalsController {
     return this.professionalsService.addQualification(
       req.user.id,
       dto,
-      certificateUrl,
+      await certificateUrl,
     );
   }
 
