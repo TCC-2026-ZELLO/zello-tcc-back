@@ -1,10 +1,18 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsNumber,
+  Min,
+  Max,
+  IsInt,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
-export enum SearchFilter {
-  TRENDING = 'trending',
+export enum SortBy {
+  DEFAULT   = 'default',
+  TRENDING  = 'trending',
   PRICE_ASC = 'price_asc',
-  RATING = 'rating',
-  TODAY = 'today',
 }
 
 export class SearchQueryDto {
@@ -13,12 +21,33 @@ export class SearchQueryDto {
   q?: string;
 
   @IsOptional()
-  @IsEnum(SearchFilter)
-  filter?: SearchFilter;
+  @IsEnum(SortBy)
+  sortBy?: SortBy;
 
   @IsOptional()
-  lat?: number;
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minPrice?: number;
 
   @IsOptional()
-  lng?: number;
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  minRating?: number;
+
+  /** Limite de resultados (padrão: 20, máx: 100) */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }

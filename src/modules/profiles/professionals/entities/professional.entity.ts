@@ -44,6 +44,10 @@ export class Professional {
 
   @Column({ name: 'profile_complete', default: false })
   profileComplete: boolean;
+
+  @Column({ name: 'average_rating', type: 'float', default: 5.0 })
+  averageRating: number;
+
   @OneToMany(() => PortfolioImage, (pi) => pi.professional)
   portfolioImages: PortfolioImage[];
 
