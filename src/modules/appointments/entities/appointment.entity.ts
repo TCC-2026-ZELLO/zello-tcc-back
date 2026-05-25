@@ -11,7 +11,12 @@ import { Business } from '../../businesses/entities/business.entity';
 import { Service } from '../../catalog/entities/service.entity';
 import { Professional } from '../../profiles/professionals/entities/professional.entity';
 
-export type AppointmentStatus = 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
+export type AppointmentStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'CANCELLED'
+  | 'NO_SHOW'
+  | 'COMPLETED';
 
 @Entity('appointments')
 export class Appointment {
@@ -27,7 +32,7 @@ export class Appointment {
   @Column()
   endTime: string;
 
-  @Column({ type: 'varchar', default: 'SCHEDULED' })
+  @Column({ type: 'varchar', default: 'CONFIRMED' })
   status: AppointmentStatus;
 
   @ManyToOne(() => User)

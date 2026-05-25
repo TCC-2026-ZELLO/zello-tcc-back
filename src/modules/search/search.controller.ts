@@ -14,6 +14,11 @@ export class SearchController {
     return this.searchService.searchProfessionals(query);
   }
 
+  @Get('professionals/recommended')
+  async getRecommended() {
+    return this.searchService.getRecommended(4);
+  }
+
   @Get('businesses')
   async searchBusinesses(@Query() query: SearchQueryDto) {
     return this.searchService.searchBusinesses(query);

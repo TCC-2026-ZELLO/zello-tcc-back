@@ -15,10 +15,10 @@ export class SucessInterceptor implements NestInterceptor {
   ): Observable<any> | Promise<Observable<any>> {
     console.log('Sua requisição feita com sucesso');
     return next.handle().pipe(
-      map((data) => ({
+      map((response) => ({
         status: HttpStatus.OK,
-        message: 'Request successful',
-        data,
+        message: response?.message || 'Request successful',
+        data: response?.data !== undefined ? response.data : response,
       })),
     );
   }

@@ -5,8 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import * as fs from 'fs';
-import * as path from 'path';
+import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 
 export interface MulterFile {
   originalname: string;
@@ -18,59 +17,78 @@ export interface MulterFile {
 @Injectable()
 export class FilesService {
   private readonly logger = new Logger(FilesService.name);
-  private readonly uploadPath = path.resolve(process.cwd(), 'uploads');
+  private containerClient: ContainerClient;
+  private readonly containerName = 'fotos';
 
   constructor() {
-    if (!fs.existsSync(this.uploadPath)) {
-      fs.mkdirSync(this.uploadPath, { recursive: true });
-      this.logger.log('📂 Diretório de uploads inicializado no disco.');
+    const sasUrl = process.env.AZURE_SAS_URL;
+    const sasToken = process.env.AZURE_SAS_TOKEN;
+
+    if (!sasUrl || !sasToken) {
+      this.logger.error(
+        'Azure Storage configs (AZURE_SAS_URL or AZURE_SAS_TOKEN) are missing in .env',
+      );
+    }
+
+    const token = sasToken?.startsWith('?') ? sasToken : `?${sasToken}`;
+    const fullUrl = `${sasUrl}${token}`;
+
+    try {
+      const blobServiceClient = new BlobServiceClient(fullUrl);
+      this.containerClient = blobServiceClient.getContainerClient(
+        this.containerName,
+      );
+
+      this.containerClient.createIfNotExists({ access: 'blob' }).catch((err) => {
+        this.logger.warn(
+          `Could not verify/create Azure container automatically: ${err.message}`,
+        );
+      });
+    } catch (error: any) {
+      this.logger.error(`Failed to initialize Azure Blob Client: ${error.message}`);
     }
   }
 
-  uploadPublicFile(file: MulterFile, folder: string): string {
+  async uploadPublicFile(file: MulterFile, folder: string): Promise<string> {
     if (!file || !file.buffer) {
       throw new BadRequestException('Arquivo de imagem inválido ou ausente.');
     }
 
     try {
-      const folderPath = path.join(this.uploadPath, folder);
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath, { recursive: true });
-      }
-
       const safeName = file.originalname
         .replace(/\s+/g, '-')
         .replace(/[^a-zA-Z0-9.\-_]/g, '');
 
-      const fileName = `${uuidv4()}-${safeName}`;
-      const fullPath = path.join(folderPath, fileName);
+      const fileName = `${folder}/${uuidv4()}-${safeName}`;
+      const blockBlobClient = this.containerClient.getBlockBlobClient(fileName);
 
-      fs.writeFileSync(fullPath, file.buffer);
+      await blockBlobClient.uploadData(file.buffer, {
+        blobHTTPHeaders: { blobContentType: file.mimetype },
+      });
 
-      this.logger.log(`✅ Arquivo salvo: ${folder}/${fileName}`);
+      this.logger.log(`✅ Arquivo salvo no Azure: ${fileName}`);
 
-      return `http://localhost:3001/uploads/${folder}/${fileName}`;
+      return blockBlobClient.url;
     } catch (err: any) {
-      this.logger.error(`❌ Erro no FileSystem: ${err.message}`);
+      this.logger.error(`❌ Erro no Azure Blob Storage: ${err.message}`);
       throw new InternalServerErrorException(
-        'Falha ao gravar arquivo no disco.',
+        `Falha ao gravar arquivo na nuvem. Detalhes do Azure: ${err.message}`,
       );
     }
   }
 
-  deleteFile(fileUrl: string): void {
+  async deleteFile(fileUrl: string): Promise<void> {
     try {
-      const relativePath = fileUrl.split('/uploads/')[1];
-      if (!relativePath) return;
+      const urlParts = fileUrl.split(`/${this.containerName}/`);
+      if (urlParts.length < 2) return;
 
-      const fullPath = path.join(this.uploadPath, relativePath);
+      const blobName = decodeURIComponent(urlParts[1]);
+      const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
 
-      if (fs.existsSync(fullPath)) {
-        fs.unlinkSync(fullPath);
-        this.logger.log(`🗑️ Arquivo removido do disco: ${relativePath}`);
-      }
-    } catch (err: any) {
-      this.logger.warn(`⚠️ Erro ao deletar arquivo físico: ${fileUrl}`);
+      await blockBlobClient.deleteIfExists();
+      this.logger.log(`Arquivo removido do Azure: ${blobName}`);
+    } catch {
+      this.logger.warn(`Erro ao deletar arquivo no Azure: ${fileUrl}`);
     }
   }
 }

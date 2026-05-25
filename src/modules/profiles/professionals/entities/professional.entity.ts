@@ -10,6 +10,7 @@ import {
 import { User } from '../../../users/entities/user.entity';
 import { BusinessProfessional } from '../../../business-professionals/entities/business-professional.entity';
 import { PortfolioImage } from './portfolio-image.entity';
+import { Qualification } from './qualification.entity';
 
 @Entity('professional')
 export class Professional {
@@ -43,6 +44,13 @@ export class Professional {
 
   @Column({ name: 'profile_complete', default: false })
   profileComplete: boolean;
+
+  @Column({ name: 'average_rating', type: 'float', default: 5.0 })
+  averageRating: number;
+
   @OneToMany(() => PortfolioImage, (pi) => pi.professional)
   portfolioImages: PortfolioImage[];
+
+  @OneToMany(() => Qualification, (q) => q.professional)
+  qualifications: Qualification[];
 }

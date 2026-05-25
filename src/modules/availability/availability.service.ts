@@ -1,6 +1,14 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  PreconditionFailedException,
+  NotFoundException,
+} from '@nestjs/common';
+import * as crypto from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 
 import { BusinessOperatingHour } from './entities/business_operating_hour.entity';
 import { ProfessionalShift } from './entities/professional-shift.entity';
@@ -15,6 +23,7 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
+import { Professional } from '../profiles/professionals/entities/professional.entity';
 
 @Injectable()
 export class AvailabilityService {
@@ -29,6 +38,8 @@ export class AvailabilityService {
     private readonly bmRepo: Repository<BusinessManager>,
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
+    @InjectRepository(Professional)
+    private readonly profRepo: Repository<Professional>,
 
     private readonly catalogService: CatalogService,
     private readonly appointmentsService: AppointmentsService,
@@ -66,15 +77,160 @@ export class AvailabilityService {
     return await this.shiftRepo.save(shift);
   }
 
-  async createException(dto: CreateScheduleExceptionDto) {
-    const { businessId, professionalId, ...rest } = dto;
+  async createException(
+    dto: CreateScheduleExceptionDto,
+    requester: ActiveUser,
+  ) {
+    const {
+      businessId,
+      professionalId,
+      date,
+      dates,
+      skipConflicts,
+      forceOverwritePending,
+      ...rest
+    } = dto;
+    const targetDates = dates || (date ? [date] : []);
 
-    const exception = this.exceptionRepo.create({
-      ...rest,
-      business: businessId ? { id: businessId } : undefined,
-      professional: professionalId ? { id: professionalId } : undefined,
+    if (targetDates.length === 0) {
+      throw new BadRequestException('Informe ao menos uma data.');
+    }
+
+    if (
+      requester.roles.includes('professional') &&
+      !requester.roles.includes('manager') &&
+      !requester.roles.includes('admin')
+    ) {
+      const prof = await this.profRepo.findOne({
+        where: { user: { id: requester.id } },
+      });
+      if (!prof || prof.id !== professionalId) {
+        throw new ForbiddenException(
+          'Acesso negado: profissionais só podem bloquear sua própria agenda.',
+        );
+      }
+    } else if (requester.roles.includes('manager') && businessId) {
+      await this.validateManagerAuthority(requester.id, businessId);
+    }
+
+    const seriesId = targetDates.length > 1 ? crypto.randomUUID() : undefined;
+    const savedExceptions: ScheduleException[] = [];
+    const conflicts: string[] = [];
+    let hasPending = false;
+
+    for (const d of targetDates) {
+      if (dto.startTime && dto.endTime) {
+        const appointments = await this.appointmentsService.getBusySlotsByDate(
+          professionalId || null,
+          d,
+          ['CONFIRMED', 'PENDING'],
+          businessId,
+        );
+
+        const sMins = this.timeToMins(dto.startTime);
+        const eMins = this.timeToMins(dto.endTime);
+
+        const overlapping = appointments.filter((app) => {
+          const appStart = this.timeToMins(app.startTime);
+          const appEnd = this.timeToMins(app.endTime);
+          return Math.max(sMins, appStart) < Math.min(eMins, appEnd);
+        });
+
+        if (overlapping.length > 0) {
+          const hasConfirmed = overlapping.some(
+            (o) => o.status === 'CONFIRMED',
+          );
+          const pendingApps = overlapping.filter((o) => o.status === 'PENDING');
+
+          if (hasConfirmed) {
+            conflicts.push(d);
+            continue;
+          }
+
+          if (pendingApps.length > 0) {
+            if (forceOverwritePending) {
+              for (const p of pendingApps) {
+                await this.appointmentsService.cancelAppointment(p.id);
+              }
+            } else {
+              hasPending = true;
+              conflicts.push(d);
+              continue;
+            }
+          }
+        }
+      }
+
+      const exception = this.exceptionRepo.create({
+        ...rest,
+        date: d,
+        seriesId: seriesId,
+        business: businessId ? { id: businessId } : undefined,
+        professional: professionalId ? { id: professionalId } : undefined,
+      });
+      savedExceptions.push(exception);
+    }
+
+    if (hasPending && !forceOverwritePending) {
+      throw new PreconditionFailedException({
+        message: 'Há reservas pendentes neste horário.',
+        hasPending: true,
+        conflicts,
+      });
+    }
+
+    if (conflicts.length > 0 && !skipConflicts) {
+      throw new ConflictException({
+        message: 'Conflito de horários nas datas fornecidas.',
+        conflicts,
+      });
+    }
+
+    return await this.exceptionRepo.save(savedExceptions);
+  }
+
+  async getExceptions(professionalId?: string, businessId?: string, date?: string) {
+    const where: any = {};
+    if (professionalId) {
+      where.professional = { id: professionalId };
+    } else if (businessId) {
+      where.business = { id: businessId };
+    }
+    if (date) {
+      where.date = date;
+    }
+
+    return await this.exceptionRepo.find({
+      where,
+      order: { date: 'ASC', startTime: 'ASC' },
+      relations: ['professional', 'business'],
     });
-    return await this.exceptionRepo.save(exception);
+  }
+
+  async deleteException(id: string, requester: ActiveUser) {
+    const exception = await this.exceptionRepo.findOne({
+      where: { id },
+      relations: ['professional', 'business'],
+    });
+    if (!exception) throw new NotFoundException('Bloqueio não encontrado');
+
+    if (
+      requester.roles.includes('professional') &&
+      !requester.roles.includes('manager') &&
+      !requester.roles.includes('admin')
+    ) {
+      const prof = await this.profRepo.findOne({
+        where: { user: { id: requester.id } },
+      });
+      if (!prof || prof.id !== exception.professional?.id) {
+        throw new ForbiddenException('Acesso negado.');
+      }
+    } else if (requester.roles.includes('manager') && exception.business) {
+      await this.validateManagerAuthority(requester.id, exception.business.id);
+    }
+
+    await this.exceptionRepo.remove(exception);
+    return { success: true };
   }
 
   private timeToMins(timeStr: string): number {
@@ -160,8 +316,10 @@ export class AvailabilityService {
     }
 
     const appointments = await this.appointmentsService.getBusySlotsByDate(
-      professionalId,
+      professionalId || null,
       date,
+      ['CONFIRMED'],
+      businessId,
     );
     for (const app of appointments) {
       blockedIntervals.push([
@@ -190,7 +348,30 @@ export class AvailabilityService {
       ([start, end]) => end - start >= totalTime,
     );
 
-    return validBounds.map(([start, end]) => ({
+    // Filtra horários que já passaram e exige 30 min de antecedência caso a data seja hoje
+    const now = new Date();
+    const isToday =
+      targetDate.getUTCFullYear() === now.getFullYear() &&
+      targetDate.getUTCMonth() === now.getMonth() &&
+      targetDate.getUTCDate() === now.getDate();
+    
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+
+    let finalBounds = validBounds;
+    if (isToday) {
+      finalBounds = finalBounds
+        .map(([start, end]) => {
+          // Se o início do intervalo for menor que (agora + 30 min), empurramos o início
+          const adjustedStart = Math.max(start, currentMins + 30);
+          return [adjustedStart, end] as [number, number];
+        })
+        .filter(([start, end]) => end - start >= totalTime);
+    } else if (targetDate < new Date(now.setHours(0, 0, 0, 0))) {
+      // Data no passado
+      finalBounds = [];
+    }
+
+    return finalBounds.map(([start, end]) => ({
       start: this.minsToTime(start),
       end: this.minsToTime(end),
       durationAvailable: end - start,
