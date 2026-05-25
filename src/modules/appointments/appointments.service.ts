@@ -3,6 +3,8 @@ import {
   ConflictException,
   Inject,
   forwardRef,
+  ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -10,6 +12,8 @@ import { Appointment, AppointmentStatus } from './entities/appointment.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { CatalogService } from '../catalog/catalog.service';
 import { AvailabilityService } from '../availability/availability.service';
+import { BusinessManager } from '../business-managers/entities/business-manager.entity';
+import { Manager } from '../profiles/managers/entities/manager.entity';
 
 @Injectable()
 export class AppointmentsService {
@@ -21,6 +25,12 @@ export class AppointmentsService {
     private readonly availabilityService: AvailabilityService,
 
     private readonly catalogService: CatalogService,
+
+    @InjectRepository(BusinessManager)
+    private readonly bmRepo: Repository<BusinessManager>,
+    
+    @InjectRepository(Manager)
+    private readonly managerRepo: Repository<Manager>,
   ) {}
 
   async create(
@@ -61,7 +71,7 @@ export class AppointmentsService {
       professional: { id: dto.professionalId },
       business: { id: dto.businessId },
       service: { id: dto.serviceId },
-      status: 'CONFIRMED',
+      status: 'PENDING',
     });
     return await this.appointmentRepo.save(appointment);
   }
@@ -100,5 +110,75 @@ export class AppointmentsService {
 
   async cancelAppointment(id: string): Promise<void> {
     await this.appointmentRepo.update(id, { status: 'CANCELLED' });
+  }
+
+  async cancelClientAppointment(id: string, clientId: string): Promise<void> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['client'],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado.');
+    }
+
+    if (appointment.client.id !== clientId) {
+      throw new ForbiddenException('Você não tem permissão para cancelar este agendamento.');
+    }
+
+    if (appointment.status !== 'PENDING') {
+      throw new ForbiddenException('Apenas agendamentos pendentes podem ser cancelados diretamente.');
+    }
+
+    await this.appointmentRepo.update(id, { status: 'CANCELLED' });
+  }
+
+  async findByClient(clientId: string): Promise<Appointment[]> {
+    return await this.appointmentRepo.find({
+      where: { client: { id: clientId } },
+      relations: ['professional', 'professional.user', 'business', 'service'],
+      order: { date: 'DESC', startTime: 'DESC' },
+    });
+  }
+
+  private async validateManagerAuthority(userId: string, businessId: string) {
+    const manager = await this.managerRepo.findOne({
+      where: { user: { id: userId } },
+    });
+    if (!manager)
+      throw new ForbiddenException('Perfil de gestor não encontrado.');
+
+    const link = await this.bmRepo.findOne({
+      where: { manager: { id: manager.id }, business: { id: businessId } },
+    });
+
+    if (!link)
+      throw new ForbiddenException(
+        'Você não tem permissão para acessar agendamentos desta empresa.',
+      );
+  }
+
+  async findByBusiness(businessId: string, userId: string): Promise<Appointment[]> {
+    await this.validateManagerAuthority(userId, businessId);
+    
+    return await this.appointmentRepo.find({
+      where: { business: { id: businessId } },
+      relations: ['client', 'professional', 'professional.user', 'service'],
+      order: { date: 'DESC', startTime: 'ASC' },
+    });
+  }
+
+  async updateStatus(id: string, status: AppointmentStatus, userId: string): Promise<Appointment> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['business'],
+    });
+
+    if (!appointment) throw new NotFoundException('Agendamento não encontrado.');
+
+    await this.validateManagerAuthority(userId, appointment.business.id);
+
+    appointment.status = status;
+    return await this.appointmentRepo.save(appointment);
   }
 }

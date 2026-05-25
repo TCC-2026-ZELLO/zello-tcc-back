@@ -348,7 +348,30 @@ export class AvailabilityService {
       ([start, end]) => end - start >= totalTime,
     );
 
-    return validBounds.map(([start, end]) => ({
+    // Filtra horários que já passaram e exige 30 min de antecedência caso a data seja hoje
+    const now = new Date();
+    const isToday =
+      targetDate.getUTCFullYear() === now.getFullYear() &&
+      targetDate.getUTCMonth() === now.getMonth() &&
+      targetDate.getUTCDate() === now.getDate();
+    
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+
+    let finalBounds = validBounds;
+    if (isToday) {
+      finalBounds = finalBounds
+        .map(([start, end]) => {
+          // Se o início do intervalo for menor que (agora + 30 min), empurramos o início
+          const adjustedStart = Math.max(start, currentMins + 30);
+          return [adjustedStart, end] as [number, number];
+        })
+        .filter(([start, end]) => end - start >= totalTime);
+    } else if (targetDate < new Date(now.setHours(0, 0, 0, 0))) {
+      // Data no passado
+      finalBounds = [];
+    }
+
+    return finalBounds.map(([start, end]) => ({
       start: this.minsToTime(start),
       end: this.minsToTime(end),
       durationAvailable: end - start,
