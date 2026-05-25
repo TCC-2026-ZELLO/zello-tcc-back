@@ -162,7 +162,7 @@ export class ProfessionalsController {
     @Body() dto: UpdateQualificationDto,
   ) {
     const newCertificateUrl = file
-      ? this.filesService.uploadPublicFile(file, 'qualifications')
+      ? await this.filesService.uploadPublicFile(file, 'qualifications')
       : undefined;
     return this.professionalsService.updateQualification(
       req.user.id,
