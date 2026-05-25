@@ -33,20 +33,16 @@ export class FilesService {
     const token = sasToken?.startsWith('?') ? sasToken : `?${sasToken}`;
     const fullUrl = `${sasUrl}${token}`;
 
-    try {
-      const blobServiceClient = new BlobServiceClient(fullUrl);
-      this.containerClient = blobServiceClient.getContainerClient(
-        this.containerName,
-      );
+    const blobServiceClient = new BlobServiceClient(fullUrl);
+    this.containerClient = blobServiceClient.getContainerClient(
+      this.containerName,
+    );
 
-      this.containerClient.createIfNotExists({ access: 'blob' }).catch((err) => {
-        this.logger.warn(
-          `Could not verify/create Azure container automatically: ${err.message}`,
-        );
-      });
-    } catch (error: any) {
-      this.logger.error(`Failed to initialize Azure Blob Client: ${error.message}`);
-    }
+    this.containerClient.createIfNotExists({ access: 'blob' }).catch((err) => {
+      this.logger.warn(
+        `Could not verify/create Azure container automatically: ${err.message}`,
+      );
+    });
   }
 
   async uploadPublicFile(file: MulterFile, folder: string): Promise<string> {
