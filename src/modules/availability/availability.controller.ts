@@ -66,15 +66,15 @@ export class AvailabilityController {
   @Get('bounds')
   getAvailableBounds(
     @Query('date') date: string,
-    @Query('professionalId') professionalId: string,
     @Query('businessId') businessId: string,
     @Query('serviceId') serviceId: string,
+    @Query('professionalId') professionalId?: string,
   ) {
     return this.availabilityService.getAvailableBounds(
       date,
-      professionalId,
       businessId,
       serviceId,
+      professionalId,
     );
   }
 }

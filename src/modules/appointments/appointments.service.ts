@@ -41,11 +41,49 @@ export class AppointmentsService {
       dto.serviceId,
     );
 
+    let targetProfessionalId = dto.professionalId;
+
+    if (!targetProfessionalId) {
+      // "Sem Preferência" - buscar todos os profissionais que atendem a empresa
+      const shifts = await this.availabilityService['shiftRepo'].find({
+        where: {
+          businessProfessional: { business: { id: dto.businessId } },
+        },
+        relations: ['businessProfessional', 'businessProfessional.professional'],
+      });
+      const profIds = [...new Set(shifts.map((s) => s.businessProfessional.professional.id))];
+
+      for (const pId of profIds) {
+        const pBounds = await this.availabilityService.getAvailableBounds(
+          dto.date,
+          dto.businessId,
+          dto.serviceId,
+          pId,
+        );
+
+        const startMins = this.timeToMins(dto.startTime);
+        const endMins = startMins + totalTime;
+
+        const isFree = pBounds.some((bound) => {
+          return startMins >= this.timeToMins(bound.start) && endMins <= this.timeToMins(bound.end);
+        });
+
+        if (isFree) {
+          targetProfessionalId = pId;
+          break; // allocate to the first available professional
+        }
+      }
+
+      if (!targetProfessionalId) {
+        throw new ConflictException('Nenhum profissional está disponível neste horário.');
+      }
+    }
+
     const availableBounds = await this.availabilityService.getAvailableBounds(
       dto.date,
-      dto.professionalId,
       dto.businessId,
       dto.serviceId,
+      targetProfessionalId,
     );
 
     const startMins = this.timeToMins(dto.startTime);
@@ -68,7 +106,7 @@ export class AppointmentsService {
       startTime: dto.startTime,
       endTime: this.minsToTime(endMins),
       client: { id: clientId },
-      professional: { id: dto.professionalId },
+      professional: { id: targetProfessionalId },
       business: { id: dto.businessId },
       service: { id: dto.serviceId },
       status: 'PENDING',
