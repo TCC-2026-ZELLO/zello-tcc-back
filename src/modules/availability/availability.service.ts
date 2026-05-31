@@ -249,9 +249,98 @@ export class AvailabilityService {
 
   async getAvailableBounds(
     date: string,
-    professionalId: string,
     businessId: string,
     serviceId: string,
+    professionalId?: string,
+  ) {
+    if (professionalId) {
+      return this._getProfessionalAvailableBounds(
+        date,
+        businessId,
+        serviceId,
+        professionalId,
+      );
+    }
+
+    const targetDate = new Date(`${date}T12:00:00Z`);
+    const dayOfWeek = targetDate.getUTCDay();
+
+    // Buscar todos os turnos da empresa para esse dia da semana
+    const shifts = await this.shiftRepo.find({
+      where: {
+        dayOfWeek,
+        businessProfessional: {
+          business: { id: businessId },
+        },
+      },
+      relations: ['businessProfessional', 'businessProfessional.professional'],
+    });
+
+    // Extrair IDs de profissionais únicos
+    const profIds = [
+      ...new Set(
+        shifts.map((s) => s.businessProfessional.professional.id),
+      ),
+    ];
+
+    if (profIds.length === 0) return [];
+
+    const allBounds: Array<{
+      start: string;
+      end: string;
+      durationAvailable: number;
+      startMins: number;
+      endMins: number;
+    }> = [];
+
+    // Obter horários para cada profissional
+    for (const pId of profIds) {
+      const bounds = await this._getProfessionalAvailableBounds(
+        date,
+        businessId,
+        serviceId,
+        pId,
+      );
+      allBounds.push(
+        ...bounds.map((b) => ({
+          ...b,
+          startMins: this.timeToMins(b.start),
+          endMins: this.timeToMins(b.end),
+        })),
+      );
+    }
+
+    if (allBounds.length === 0) return [];
+
+    // Mesclar os horários disponíveis (União)
+    allBounds.sort((a, b) => a.startMins - b.startMins);
+    const mergedWorking: Array<[number, number]> = [];
+    
+    for (const b of allBounds) {
+      if (!mergedWorking.length) {
+        mergedWorking.push([b.startMins, b.endMins]);
+      } else {
+        const last = mergedWorking[mergedWorking.length - 1];
+        if (b.startMins <= last[1]) {
+          last[1] = Math.max(last[1], b.endMins);
+        } else {
+          mergedWorking.push([b.startMins, b.endMins]);
+        }
+      }
+    }
+
+    return mergedWorking.map(([start, end]) => ({
+      start: this.minsToTime(start),
+      end: this.minsToTime(end),
+      durationAvailable: end - start,
+    }));
+  }
+
+  private async _getProfessionalAvailableBounds(
+    date: string,
+    businessId: string,
+    serviceId: string,
+    professionalId: string,
   ) {
     const targetDate = new Date(`${date}T12:00:00Z`);
     const dayOfWeek = targetDate.getUTCDay();
