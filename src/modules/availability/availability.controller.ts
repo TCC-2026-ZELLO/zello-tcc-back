@@ -54,7 +54,11 @@ export class AvailabilityController {
     @Query('businessId') businessId?: string,
     @Query('date') date?: string,
   ) {
-    return this.availabilityService.getExceptions(professionalId, businessId, date);
+    return this.availabilityService.getExceptions(
+      professionalId,
+      businessId,
+      date,
+    );
   }
 
   @Delete('exceptions/:id')
@@ -75,6 +79,14 @@ export class AvailabilityController {
       businessId,
       serviceId,
       professionalId,
+    );
+  }
+
+  @Get('shifts')
+  @Roles('manager', 'professional', 'admin')
+  getShifts(@Query('businessProfessionalId') businessProfessionalId: string) {
+    return this.availabilityService.getShiftsByBusinessProfessional(
+      businessProfessionalId,
     );
   }
 }

@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { BusinessOperatingHour } from './entities/business_operating_hour.entity';
 import { ProfessionalShift } from './entities/professional-shift.entity';
@@ -189,7 +189,11 @@ export class AvailabilityService {
     return await this.exceptionRepo.save(savedExceptions);
   }
 
-  async getExceptions(professionalId?: string, businessId?: string, date?: string) {
+  async getExceptions(
+    professionalId?: string,
+    businessId?: string,
+    date?: string,
+  ) {
     const where: any = {};
     if (professionalId) {
       where.professional = { id: professionalId };
@@ -203,7 +207,7 @@ export class AvailabilityService {
     return await this.exceptionRepo.find({
       where,
       order: { date: 'ASC', startTime: 'ASC' },
-      relations: ['professional', 'business'],
+      relations: ['professional', 'professional.user', 'business'],
     });
   }
 
@@ -278,9 +282,7 @@ export class AvailabilityService {
 
     // Extrair IDs de profissionais únicos
     const profIds = [
-      ...new Set(
-        shifts.map((s) => s.businessProfessional.professional.id),
-      ),
+      ...new Set(shifts.map((s) => s.businessProfessional.professional.id)),
     ];
 
     if (profIds.length === 0) return [];
@@ -315,7 +317,7 @@ export class AvailabilityService {
     // Mesclar os horários disponíveis (União)
     allBounds.sort((a, b) => a.startMins - b.startMins);
     const mergedWorking: Array<[number, number]> = [];
-    
+
     for (const b of allBounds) {
       if (!mergedWorking.length) {
         mergedWorking.push([b.startMins, b.endMins]);
@@ -443,7 +445,7 @@ export class AvailabilityService {
       targetDate.getUTCFullYear() === now.getFullYear() &&
       targetDate.getUTCMonth() === now.getMonth() &&
       targetDate.getUTCDate() === now.getDate();
-    
+
     const currentMins = now.getHours() * 60 + now.getMinutes();
 
     let finalBounds = validBounds;
@@ -483,4 +485,12 @@ export class AvailabilityService {
         'Você não tem permissão para gerenciar esta empresa.',
       );
   }
+
+  async getShiftsByBusinessProfessional(businessProfessionalId: string) {
+    return await this.shiftRepo.find({
+      where: { businessProfessional: { id: businessProfessionalId } },
+    });
+  }
 }
+
+

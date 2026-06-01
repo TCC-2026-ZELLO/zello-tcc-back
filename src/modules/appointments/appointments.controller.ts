@@ -8,6 +8,7 @@ import {
   Patch,
   Param,
   Get,
+  Query,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
@@ -30,6 +31,25 @@ export class AppointmentsController {
   @ApiOperation({ summary: 'Listar agendamentos do cliente logado' })
   async findMy(@Request() req: { user: ActiveUser }) {
     return this.appointmentsService.findByClient(req.user.id);
+  }
+
+  @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary:
+      'Listar agendamentos com filtros (date, businessId, professionalId)',
+  })
+  async findAll(
+    @Request() req: { user: ActiveUser },
+    @Query('date') date?: string,
+    @Query('businessId') businessId?: string,
+    @Query('professionalId') professionalId?: string,
+  ) {
+    return this.appointmentsService.findAll(req.user.id, {
+      date,
+      businessId,
+      professionalId,
+    });
   }
 
   @Post()
@@ -75,7 +95,11 @@ export class AppointmentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAppointmentStatusDto,
   ) {
-    const appointment = await this.appointmentsService.updateStatus(id, dto.status, req.user.id);
+    const appointment = await this.appointmentsService.updateStatus(
+      id,
+      dto.status,
+      req.user.id,
+    );
     return {
       message: `Status atualizado para ${dto.status}`,
       data: appointment,
