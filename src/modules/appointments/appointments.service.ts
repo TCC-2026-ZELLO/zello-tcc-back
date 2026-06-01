@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, FindOptionsWhere } from 'typeorm';
 import { Appointment, AppointmentStatus } from './entities/appointment.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { CatalogService } from '../catalog/catalog.service';
@@ -28,7 +28,7 @@ export class AppointmentsService {
 
     @InjectRepository(BusinessManager)
     private readonly bmRepo: Repository<BusinessManager>,
-    
+
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
   ) {}
@@ -44,14 +44,18 @@ export class AppointmentsService {
     let targetProfessionalId = dto.professionalId;
 
     if (!targetProfessionalId) {
-      // "Sem Preferência" - buscar todos os profissionais que atendem a empresa
       const shifts = await this.availabilityService['shiftRepo'].find({
         where: {
           businessProfessional: { business: { id: dto.businessId } },
         },
-        relations: ['businessProfessional', 'businessProfessional.professional'],
+        relations: [
+          'businessProfessional',
+          'businessProfessional.professional',
+        ],
       });
-      const profIds = [...new Set(shifts.map((s) => s.businessProfessional.professional.id))];
+      const profIds = [
+        ...new Set(shifts.map((s) => s.businessProfessional.professional.id)),
+      ];
 
       for (const pId of profIds) {
         const pBounds = await this.availabilityService.getAvailableBounds(
@@ -65,17 +69,22 @@ export class AppointmentsService {
         const endMins = startMins + totalTime;
 
         const isFree = pBounds.some((bound) => {
-          return startMins >= this.timeToMins(bound.start) && endMins <= this.timeToMins(bound.end);
+          return (
+            startMins >= this.timeToMins(bound.start) &&
+            endMins <= this.timeToMins(bound.end)
+          );
         });
 
         if (isFree) {
           targetProfessionalId = pId;
-          break; // allocate to the first available professional
+          break;
         }
       }
 
       if (!targetProfessionalId) {
-        throw new ConflictException('Nenhum profissional está disponível neste horário.');
+        throw new ConflictException(
+          'Nenhum profissional está disponível neste horário.',
+        );
       }
     }
 
@@ -120,7 +129,7 @@ export class AppointmentsService {
     statuses: AppointmentStatus[] = ['CONFIRMED'],
     businessId?: string,
   ): Promise<Appointment[]> {
-    const where: import('typeorm').FindOptionsWhere<Appointment> = {
+    const where: FindOptionsWhere<Appointment> = {
       date: date,
       status: In(statuses),
     };
@@ -156,17 +165,16 @@ export class AppointmentsService {
       relations: ['client'],
     });
 
-    if (!appointment) {
+    if (!appointment)
       throw new NotFoundException('Agendamento não encontrado.');
-    }
-
-    if (appointment.client.id !== clientId) {
-      throw new ForbiddenException('Você não tem permissão para cancelar este agendamento.');
-    }
-
-    if (appointment.status !== 'PENDING') {
-      throw new ForbiddenException('Apenas agendamentos pendentes podem ser cancelados diretamente.');
-    }
+    if (appointment.client.id !== clientId)
+      throw new ForbiddenException(
+        'Você não tem permissão para cancelar este agendamento.',
+      );
+    if (appointment.status !== 'PENDING')
+      throw new ForbiddenException(
+        'Apenas agendamentos pendentes podem ser cancelados diretamente.',
+      );
 
     await this.appointmentRepo.update(id, { status: 'CANCELLED' });
   }
@@ -196,9 +204,12 @@ export class AppointmentsService {
       );
   }
 
-  async findByBusiness(businessId: string, userId: string): Promise<Appointment[]> {
+  async findByBusiness(
+    businessId: string,
+    userId: string,
+  ): Promise<Appointment[]> {
     await this.validateManagerAuthority(userId, businessId);
-    
+
     return await this.appointmentRepo.find({
       where: { business: { id: businessId } },
       relations: ['client', 'professional', 'professional.user', 'service'],
@@ -206,13 +217,40 @@ export class AppointmentsService {
     });
   }
 
-  async updateStatus(id: string, status: AppointmentStatus, userId: string): Promise<Appointment> {
+  async findAll(
+    userId: string,
+    params: { date?: string; businessId?: string; professionalId?: string },
+  ): Promise<Appointment[]> {
+    const where: FindOptionsWhere<Appointment> = {};
+
+    if (params.businessId) {
+      await this.validateManagerAuthority(userId, params.businessId);
+      where.business = { id: params.businessId };
+    }
+
+    if (params.date) where.date = params.date;
+    if (params.professionalId)
+      where.professional = { id: params.professionalId };
+
+    return await this.appointmentRepo.find({
+      where,
+      relations: ['client', 'professional', 'professional.user', 'service'],
+      order: { startTime: 'ASC' },
+    });
+  }
+
+  async updateStatus(
+    id: string,
+    status: AppointmentStatus,
+    userId: string,
+  ): Promise<Appointment> {
     const appointment = await this.appointmentRepo.findOne({
       where: { id },
       relations: ['business'],
     });
 
-    if (!appointment) throw new NotFoundException('Agendamento não encontrado.');
+    if (!appointment)
+      throw new NotFoundException('Agendamento não encontrado.');
 
     await this.validateManagerAuthority(userId, appointment.business.id);
 
