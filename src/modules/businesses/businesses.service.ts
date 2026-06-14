@@ -60,6 +60,7 @@ export class BusinessesService {
     if (dto.description !== undefined) business.description = dto.description;
     if (dto.visibilityStatus !== undefined)
       business.visibilityStatus = dto.visibilityStatus;
+    if (dto.timezone !== undefined) business.timezone = dto.timezone;
 
     if (business.tradeName && business.description && business.photoUrl) {
       business.profileComplete = true;
@@ -150,6 +151,7 @@ export class BusinessesService {
       );
       const business = queryRunner.manager.create(Business, {
         tradeName: dto.tradeName,
+        ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
       });
       const savedBusiness = await queryRunner.manager.save(Business, business);
 

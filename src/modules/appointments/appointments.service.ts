@@ -7,7 +7,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, FindOptionsWhere } from 'typeorm';
+import {
+  Repository,
+  In,
+  FindOptionsWhere,
+  EntityManager,
+  DataSource,
+} from 'typeorm';
 import { Appointment, AppointmentStatus } from './entities/appointment.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { CatalogService } from '../catalog/catalog.service';
@@ -31,6 +37,8 @@ export class AppointmentsService {
 
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
+
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(
@@ -41,86 +49,187 @@ export class AppointmentsService {
       dto.serviceId,
     );
 
-    let targetProfessionalId = dto.professionalId;
-
-    if (!targetProfessionalId) {
-      const shifts = await this.availabilityService['shiftRepo'].find({
-        where: {
-          businessProfessional: { business: { id: dto.businessId } },
-        },
-        relations: [
-          'businessProfessional',
-          'businessProfessional.professional',
-        ],
-      });
-      const profIds = [
-        ...new Set(shifts.map((s) => s.businessProfessional.professional.id)),
-      ];
-
-      for (const pId of profIds) {
-        const pBounds = await this.availabilityService.getAvailableBounds(
-          dto.date,
-          dto.businessId,
-          dto.serviceId,
-          pId,
-        );
-
-        const startMins = this.timeToMins(dto.startTime);
-        const endMins = startMins + totalTime;
-
-        const isFree = pBounds.some((bound) => {
-          return (
-            startMins >= this.timeToMins(bound.start) &&
-            endMins <= this.timeToMins(bound.end)
-          );
-        });
-
-        if (isFree) {
-          targetProfessionalId = pId;
-          break;
-        }
-      }
-
-      if (!targetProfessionalId) {
-        throw new ConflictException(
-          'Nenhum profissional está disponível neste horário.',
-        );
-      }
-    }
-
-    const availableBounds = await this.availabilityService.getAvailableBounds(
-      dto.date,
-      dto.businessId,
-      dto.serviceId,
-      targetProfessionalId,
-    );
-
     const startMins = this.timeToMins(dto.startTime);
     const endMins = startMins + totalTime;
 
-    const isValid = availableBounds.some((bound) => {
+    const targetProfessionalId = await this.resolveTargetProfessional(
+      dto,
+      startMins,
+      endMins,
+    );
+
+    // Transação + lock por (profissional, data): garante que, mesmo que duas
+    // requisições passem pela validação de disponibilidade quase ao mesmo
+    // tempo, apenas a primeira a confirmar consiga reservar o horário — a
+    // segunda é bloqueada até a primeira concluir e então recebe ConflictException
+    // ao perceber que o slot já não está mais livre (AC2).
+    return await this.dataSource.transaction(async (manager) => {
+      await this.lockProfessionalSchedule(
+        manager,
+        targetProfessionalId,
+        dto.date,
+      );
+
+      await this.assertNoOverlap(
+        manager,
+        targetProfessionalId,
+        dto.date,
+        startMins,
+        endMins,
+      );
+
+      const appointment = manager.create(Appointment, {
+        date: dto.date,
+        startTime: dto.startTime,
+        endTime: this.minsToTime(endMins),
+        client: { id: clientId },
+        professional: { id: targetProfessionalId },
+        business: { id: dto.businessId },
+        service: { id: dto.serviceId },
+        status: 'PENDING',
+      });
+
+      return await manager.save(Appointment, appointment);
+    });
+  }
+
+  /**
+   * Determina o profissional que atenderá o agendamento: usa o informado no
+   * DTO (validando disponibilidade) ou, se ausente, procura o primeiro
+   * profissional da empresa livre no horário solicitado.
+   */
+  private async resolveTargetProfessional(
+    dto: CreateAppointmentDto,
+    startMins: number,
+    endMins: number,
+  ): Promise<string> {
+    if (dto.professionalId) {
+      await this.ensureSlotIsAvailable(
+        dto.date,
+        dto.businessId,
+        dto.serviceId,
+        dto.professionalId,
+        startMins,
+        endMins,
+      );
+      return dto.professionalId;
+    }
+
+    const profIds = await this.availabilityService.getBusinessProfessionalIds(
+      dto.businessId,
+    );
+
+    for (const professionalId of profIds) {
+      const isFree = await this.isSlotFree(
+        dto.date,
+        dto.businessId,
+        dto.serviceId,
+        professionalId,
+        startMins,
+        endMins,
+      );
+
+      if (isFree) return professionalId;
+    }
+
+    throw new ConflictException(
+      'Nenhum profissional está disponível neste horário.',
+    );
+  }
+
+  private async isSlotFree(
+    date: string,
+    businessId: string,
+    serviceId: string,
+    professionalId: string,
+    startMins: number,
+    endMins: number,
+  ): Promise<boolean> {
+    const availableBounds = await this.availabilityService.getAvailableBounds(
+      date,
+      businessId,
+      serviceId,
+      professionalId,
+    );
+
+    return availableBounds.some((bound) => {
       const boundStart = this.timeToMins(bound.start);
       const boundEnd = this.timeToMins(bound.end);
       return startMins >= boundStart && endMins <= boundEnd;
     });
+  }
 
-    if (!isValid) {
+  private async ensureSlotIsAvailable(
+    date: string,
+    businessId: string,
+    serviceId: string,
+    professionalId: string,
+    startMins: number,
+    endMins: number,
+  ): Promise<void> {
+    const isFree = await this.isSlotFree(
+      date,
+      businessId,
+      serviceId,
+      professionalId,
+      startMins,
+      endMins,
+    );
+
+    if (!isFree) {
       throw new ConflictException(
         'O horário selecionado não está mais disponível.',
       );
     }
+  }
 
-    const appointment = this.appointmentRepo.create({
-      date: dto.date,
-      startTime: dto.startTime,
-      endTime: this.minsToTime(endMins),
-      client: { id: clientId },
-      professional: { id: targetProfessionalId },
-      business: { id: dto.businessId },
-      service: { id: dto.serviceId },
-      status: 'PENDING',
+  /**
+   * Serializa criações concorrentes de agendamento para o mesmo profissional
+   * e data via advisory lock do Postgres, liberado automaticamente ao final
+   * da transação (commit ou rollback).
+   */
+  private async lockProfessionalSchedule(
+    manager: EntityManager,
+    professionalId: string,
+    date: string,
+  ): Promise<void> {
+    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+      `${professionalId}:${date}`,
+    ]);
+  }
+
+  /**
+   * Revalida, já dentro da transação travada, se o horário ainda está livre —
+   * cobre o caso de outra reserva ter sido confirmada entre a validação
+   * inicial e a obtenção do lock (AC2).
+   */
+  private async assertNoOverlap(
+    manager: EntityManager,
+    professionalId: string,
+    date: string,
+    startMins: number,
+    endMins: number,
+  ): Promise<void> {
+    const existingAppointments = await manager.find(Appointment, {
+      where: {
+        professional: { id: professionalId },
+        date,
+        status: In(['PENDING', 'CONFIRMED']),
+      },
+      select: ['id', 'startTime', 'endTime'],
     });
-    return await this.appointmentRepo.save(appointment);
+
+    const hasConflict = existingAppointments.some((app) => {
+      const appStart = this.timeToMins(app.startTime);
+      const appEnd = this.timeToMins(app.endTime);
+      return Math.max(startMins, appStart) < Math.min(endMins, appEnd);
+    });
+
+    if (hasConflict) {
+      throw new ConflictException(
+        'O horário selecionado não está mais disponível.',
+      );
+    }
   }
 
   async getBusySlotsByDate(
