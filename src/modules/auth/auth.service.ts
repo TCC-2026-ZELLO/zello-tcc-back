@@ -28,6 +28,7 @@ export class AuthService {
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findByEmailWithPassword(email);
+    console.log(user);
 
     if (!user) {
       throw new UnauthorizedException('E-mail ou senha incorretos.');
@@ -38,6 +39,11 @@ export class AuthService {
     }
 
     const isMatch = await bcrypt.compare(pass, user.passwordHash);
+
+    console.log(`Input Password: ${pass}`);
+    console.log(`Hash from DB: ${user.passwordHash}`);
+    console.log(`Match Result: ${isMatch}`);
+
     if (!isMatch) {
       throw new UnauthorizedException('E-mail ou senha incorretos.');
     }

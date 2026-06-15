@@ -8,6 +8,7 @@ import { BusinessManager } from '../business-managers/entities/business-manager.
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { BusinessProfessionalService } from './entities/business-professional-service.entity';
 import { Professional } from '../profiles/professionals/entities/professional.entity';
+import { ProfessionalShift } from '../availability/entities/professional-shift.entity';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { Professional } from '../profiles/professionals/entities/professional.en
       BusinessProfessionalService,
       BusinessManager,
       Professional,
+      ProfessionalShift,
       Manager,
     ]),
   ],

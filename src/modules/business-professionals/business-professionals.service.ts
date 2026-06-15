@@ -13,6 +13,7 @@ import { BusinessManager } from '../business-managers/entities/business-manager.
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { BusinessProfessionalService } from './entities/business-professional-service.entity';
 import { Professional } from '../profiles/professionals/entities/professional.entity';
+import { ProfessionalShift } from '../availability/entities/professional-shift.entity';
 
 @Injectable()
 export class BusinessProfessionalsService {
@@ -31,6 +32,9 @@ export class BusinessProfessionalsService {
 
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
+
+    @InjectRepository(ProfessionalShift)
+    private readonly shiftRepo: Repository<ProfessionalShift>,
   ) {}
 
   async create(dto: CreateBusinessProfessionalDto, userId: string) {
@@ -141,5 +145,37 @@ export class BusinessProfessionalsService {
     );
 
     return await this.bpsRepo.save(newLinks);
+  }
+
+  async findProfessionalShifts(bpId: string) {
+    await this.findOne(bpId);
+    return await this.shiftRepo.find({
+      where: { businessProfessional: { id: bpId } },
+      order: { dayOfWeek: 'ASC' },
+    });
+  }
+
+  async updateProfessionalShifts(
+    bpId: string,
+    shifts: { dayOfWeek: number; startTime: string; endTime: string }[],
+  ) {
+    await this.findOne(bpId);
+
+    return await this.bpRepo.manager.transaction(async (em) => {
+      await em.delete(ProfessionalShift, {
+        businessProfessional: { id: bpId },
+      });
+
+      const newShifts = shifts.map((s) =>
+        em.create(ProfessionalShift, {
+          dayOfWeek: s.dayOfWeek,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          businessProfessional: { id: bpId },
+        }),
+      );
+
+      return await em.save(ProfessionalShift, newShifts);
+    });
   }
 }
