@@ -38,6 +38,7 @@ export class AuthService {
     }
 
     const isMatch = await bcrypt.compare(pass, user.passwordHash);
+
     if (!isMatch) {
       throw new UnauthorizedException('E-mail ou senha incorretos.');
     }

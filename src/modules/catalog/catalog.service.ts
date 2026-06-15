@@ -77,16 +77,25 @@ export class CatalogService {
 
   async update(id: string, dto: UpdateServiceDto) {
     const service = await this.findOne(id);
-    this.serviceRepo.merge(service, dto);
+    const { name, description, durationMinutes, cleanupMinutes, price } = dto;
+
+    this.serviceRepo.merge(service, {
+      name,
+      description,
+      durationMinutes,
+      cleanupMinutes,
+      price,
+    });
+
     return await this.serviceRepo.save(service);
   }
 
   async remove(id: string) {
     const service = await this.findOne(id);
+
+    await this.serviceRepo.save(service);
+
     const businessId = service.business.id;
-
-    await this.serviceRepo.remove(service);
-
     const links = await this.bpRepo.find({
       where: { business: { id: businessId } },
       relations: ['professional'],
@@ -98,7 +107,7 @@ export class CatalogService {
       );
     }
 
-    return { message: 'Serviço removido e perfis revalidados.' };
+    return { message: 'Serviço desativado e perfis revalidados com sucesso.' };
   }
 
   async getServiceDuration(id: string) {

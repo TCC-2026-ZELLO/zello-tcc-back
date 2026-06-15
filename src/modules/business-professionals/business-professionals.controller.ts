@@ -91,4 +91,26 @@ export class BusinessProfessionalsController {
   ) {
     return this.bpService.updateProfessionalServices(id, dto.serviceIds);
   }
+
+  @Get(':id/shifts')
+  @ApiOperation({
+    summary: 'Listar horários de trabalho (turnos) deste vínculo',
+  })
+  findShifts(@Param('id', ParseUUIDPipe) id: string) {
+    return this.bpService.findProfessionalShifts(id);
+  }
+
+  @Patch(':id/shifts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('manager')
+  @ApiOperation({ summary: 'Sincronizar turnos do profissional' })
+  updateShifts(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body()
+    dto: {
+      shifts: { dayOfWeek: number; startTime: string; endTime: string }[];
+    },
+  ) {
+    return this.bpService.updateProfessionalShifts(id, dto.shifts);
+  }
 }

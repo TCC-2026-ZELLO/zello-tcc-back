@@ -283,11 +283,22 @@ export class UsersService {
   }
 
   async findByEmailWithPassword(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({
-      where: { email },
-      relations: ['roles'],
-      select: ['id', 'name', 'email', 'passwordHash', 'provider', 'roles'],
-    });
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'roles')
+      .where('LOWER(user.email) = LOWER(:email)', {
+        email: email.toLowerCase(),
+      })
+      .select([
+        'user.id',
+        'user.name',
+        'user.email',
+        'user.passwordHash',
+        'user.provider',
+        'roles.id',
+        'roles.name',
+      ])
+      .getOne();
   }
 
   async findByEmail(email: string): Promise<User | null> {

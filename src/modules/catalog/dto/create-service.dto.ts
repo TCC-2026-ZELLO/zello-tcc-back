@@ -7,6 +7,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class CreateServiceDto {
   @ApiProperty({ example: 'Corte de Cabelo' })
@@ -32,6 +33,7 @@ export class CreateServiceDto {
   cleanupMinutes: number;
 
   @ApiProperty({ example: 50.0 })
+  @Type(() => Number)
   @IsNumber()
   price: number;
 }
