@@ -9,7 +9,8 @@ import {
 } from 'class-validator';
 
 export class CreateBusinessOperatingHourDto {
-  @IsUUID()
+  //@IsUUID()
+  @IsString()
   businessId: string;
 
   @IsInt()

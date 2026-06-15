@@ -72,7 +72,9 @@ export class BusinessesService {
     await this.validateOwnership(id, userId);
     const business = await this.findOne(id);
 
-    if (business.photoUrl) this.filesService.deleteFile(business.photoUrl);
+    if (business.photoUrl) {
+      await this.filesService.deleteFile(business.photoUrl);
+    }
 
     business.photoUrl = url;
     return await this.businessRepo.save(business);
@@ -82,7 +84,9 @@ export class BusinessesService {
     await this.validateOwnership(id, userId);
     const business = await this.findOne(id);
 
-    if (business.bannerUrl) this.filesService.deleteFile(business.bannerUrl);
+    if (business.bannerUrl) {
+      await this.filesService.deleteFile(business.bannerUrl);
+    }
 
     business.bannerUrl = url;
     return await this.businessRepo.save(business);
@@ -103,12 +107,13 @@ export class BusinessesService {
       where: { id: imageId, business: { id } },
     });
 
-    if (!image)
+    if (!image) {
       throw new NotFoundException(
         'Imagem não encontrada na galeria desta empresa.',
       );
+    }
 
-    this.filesService.deleteFile(image.url);
+    await this.filesService.deleteFile(image.url);
     return await this.galleryRepo.remove(image);
   }
 

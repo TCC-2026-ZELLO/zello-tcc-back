@@ -1,11 +1,13 @@
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
 
 export class CreateBusinessManagerDto {
   @IsNotEmpty()
-  @IsUUID()
+  //@IsUUID()
+  @IsString()
   managerId: string;
 
   @IsNotEmpty()
-  @IsUUID()
+  //@IsUUID()
+  @IsString()
   businessId: string;
 }

@@ -85,8 +85,9 @@ export class ProfessionalsService {
     });
     if (!professional) throw new NotFoundException('Perfil não encontrado');
 
-    if (professional.photoUrl)
-      this.filesService.deleteFile(professional.photoUrl);
+    if (professional.photoUrl) {
+      await this.filesService.deleteFile(professional.photoUrl);
+    }
 
     professional.photoUrl = imageUrl;
     return await this.professionalRepo.save(professional);
@@ -98,8 +99,9 @@ export class ProfessionalsService {
     });
     if (!professional) throw new NotFoundException('Perfil não encontrado');
 
-    if (professional.bannerUrl)
-      this.filesService.deleteFile(professional.bannerUrl);
+    if (professional.bannerUrl) {
+      await this.filesService.deleteFile(professional.bannerUrl);
+    }
 
     professional.bannerUrl = imageUrl;
     return await this.professionalRepo.save(professional);
@@ -126,15 +128,22 @@ export class ProfessionalsService {
     });
     if (!image) throw new NotFoundException('Imagem não encontrada');
 
-    this.filesService.deleteFile(image.url);
+    await this.filesService.deleteFile(image.url);
     return await this.portfolioRepo.remove(image);
   }
-
 
   async findQualifications(professionalId: string) {
     return await this.qualificationRepo.find({
       where: { professional: { id: professionalId } },
-      select: ['id', 'title', 'institution', 'type', 'year', 'certificateUrl', 'createdAt'],
+      select: [
+        'id',
+        'title',
+        'institution',
+        'type',
+        'year',
+        'certificateUrl',
+        'createdAt',
+      ],
       order: { createdAt: 'DESC' },
     });
   }
@@ -176,12 +185,13 @@ export class ProfessionalsService {
       throw new NotFoundException('Qualificação não encontrada');
 
     if (dto.title !== undefined) qualification.title = dto.title;
-    if (dto.institution !== undefined) qualification.institution = dto.institution;
+    if (dto.institution !== undefined)
+      qualification.institution = dto.institution;
     if (dto.type !== undefined) qualification.type = dto.type;
     if (dto.year !== undefined) qualification.year = dto.year;
 
     if (newCertificateUrl) {
-      this.filesService.deleteFile(qualification.certificateUrl);
+      await this.filesService.deleteFile(qualification.certificateUrl);
       qualification.certificateUrl = newCertificateUrl;
     }
 
@@ -200,7 +210,7 @@ export class ProfessionalsService {
     if (!qualification)
       throw new NotFoundException('Qualificação não encontrada');
 
-    this.filesService.deleteFile(qualification.certificateUrl);
+    await this.filesService.deleteFile(qualification.certificateUrl);
     return await this.qualificationRepo.remove(qualification);
   }
 

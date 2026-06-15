@@ -62,11 +62,11 @@ export class FilesService {
         blobHTTPHeaders: { blobContentType: file.mimetype },
       });
 
-      this.logger.log(`✅ Arquivo salvo no Azure: ${fileName}`);
+      this.logger.log(`Arquivo salvo no Azure: ${fileName}`);
 
       return blockBlobClient.url;
     } catch (err: any) {
-      this.logger.error(`❌ Erro no Azure Blob Storage: ${err.message}`);
+      this.logger.error(`Erro no Azure Blob Storage: ${err.message}`);
       throw new InternalServerErrorException(
         `Falha ao gravar arquivo na nuvem. Detalhes do Azure: ${err.message}`,
       );

@@ -3,11 +3,12 @@ import {
   IsEmail,
   IsNotEmpty,
   IsOptional,
-  IsUUID,
+  IsString,
 } from 'class-validator';
 
 export class CreateBusinessProfessionalDto {
-  @IsUUID()
+  //@IsUUID()
+  @IsString()
   @IsNotEmpty()
   businessId: string;
 
