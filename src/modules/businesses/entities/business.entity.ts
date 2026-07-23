@@ -4,10 +4,12 @@ import {
   Column,
   DeleteDateColumn,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 import { BusinessProfessional } from '../../business-professionals/entities/business-professional.entity';
 import { BusinessManager } from '../../business-managers/entities/business-manager.entity';
 import { GalleryImage } from './gallery-image.entity';
+import { Address } from '../../addresses/entities/address.entity';
 
 @Entity('business')
 export class Business {
@@ -22,6 +24,15 @@ export class Business {
 
   @Column({ name: 'visibilityStatus', default: true })
   visibilityStatus: boolean;
+
+  @Column({ name: 'cnpj', type: 'varchar', length: 14, nullable: true, unique: true })
+  cnpj: string;
+
+  @Column({ name: 'legal_name', type: 'varchar', length: 200, nullable: true })
+  legalName: string;
+
+  @Column({ name: 'phone', type: 'varchar', length: 15, nullable: true })
+  phone: string;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz' })
   deletedAt: Date;
@@ -43,6 +54,9 @@ export class Business {
 
   @OneToMany(() => GalleryImage, (pi) => pi.business)
   galleryImages: GalleryImage[];
+
+  @OneToOne(() => Address, (address) => address.business)
+  address: Address;
 
   @Column({ name: 'profile_complete', default: false })
   profileComplete: boolean;
