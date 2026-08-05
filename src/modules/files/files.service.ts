@@ -68,7 +68,7 @@ export class FilesService {
     } catch (err: any) {
       this.logger.error(`Erro no Azure Blob Storage: ${err.message}`);
       throw new InternalServerErrorException(
-        `Falha ao gravar arquivo na nuvem. Detalhes do Azure: ${err.message}`,
+        'Falha ao processar o arquivo. Tente novamente mais tarde.',
       );
     }
   }

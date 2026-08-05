@@ -15,6 +15,7 @@ import { Role } from './role.entity';
 import { Manager } from '../../profiles/managers/entities/manager.entity';
 import { Professional } from '../../profiles/professionals/entities/professional.entity';
 import { Client } from '../../profiles/clients/entities/client.entity';
+import { Address } from '../../addresses/entities/address.entity';
 
 export enum AuthProvider {
   LOCAL = 'local',
@@ -58,6 +59,15 @@ export class User {
   @Index()
   provider: AuthProvider;
 
+  @Column({ name: 'phone', type: 'varchar', length: 15, nullable: true })
+  phone: string;
+
+  @Column({ name: 'cpf', type: 'varchar', length: 11, nullable: true, unique: true })
+  cpf: string;
+
+  @Column({ name: 'phone_verified_at', type: 'timestamptz', nullable: true })
+  phoneVerifiedAt: Date;
+
   @ManyToMany(() => Role, (role) => role.users)
   @JoinTable({
     name: 'user_role',
@@ -74,6 +84,9 @@ export class User {
 
   @OneToOne(() => Manager, (manager) => manager.user)
   manager: Manager;
+
+  @OneToOne(() => Address, (address) => address.user)
+  address: Address;
 
   @OneToMany(() => RefreshToken, (token) => token.user)
   refreshTokens: RefreshToken[];

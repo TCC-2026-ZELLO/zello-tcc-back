@@ -25,6 +25,8 @@ import { Client } from '../profiles/clients/entities/client.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { Business } from '../businesses/entities/business.entity';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
+import { Address } from '../addresses/entities/address.entity';
+import { FilesService } from '../files/files.service';
 
 @Injectable()
 export class UsersService {
@@ -34,6 +36,8 @@ export class UsersService {
 
     @InjectRepository(Role)
     private readonly rolesRepository: Repository<Role>,
+
+    private readonly filesService: FilesService,
   ) {}
 
   async onModuleInit() {
@@ -56,13 +60,21 @@ export class UsersService {
     }
   }
 
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto, photo?: Express.Multer.File) {
     const roleName =
       createUserDto.accountType === 'PROFISSIONAL'
         ? 'professional'
         : createUserDto.accountType === 'ESTABELECIMENTO'
           ? 'manager'
           : 'client';
+
+    let photoUrl: string | null = null;
+    if (photo) {
+      const folder = createUserDto.accountType === 'ESTABELECIMENTO' ? 'business-photos' 
+        : createUserDto.accountType === 'PROFISSIONAL' ? 'avatars' 
+        : 'client-photos';
+      photoUrl = await this.filesService.uploadPublicFile(photo as any, folder);
+    }
 
     const userExistente = await this.findByEmailWithPassword(
       createUserDto.email,
@@ -89,11 +101,30 @@ export class UsersService {
       return await this.usersRepository.manager.transaction(
         async (em: EntityManager) => {
           if (roleName === 'professional')
-            await this.appendProfessional(userExistente.id, em);
+            await this.appendProfessional(userExistente.id, em, {
+              specialty: createUserDto.specialty,
+              biography: createUserDto.biography,
+              photoUrl,
+            });
           else if (roleName === 'manager')
-            await this.appendManager(userExistente.id, em);
+            await this.appendManager(userExistente.id, em, {
+              legalName: createUserDto.legalName,
+              cnpj: createUserDto.cnpj,
+              tradeName: createUserDto.tradeName,
+              phone: createUserDto.businessPhone,
+              photoUrl,
+              address: createUserDto.zipCode ? {
+                zipCode: createUserDto.zipCode!,
+                street: createUserDto.street!,
+                number: createUserDto.addressNumber!,
+                complement: createUserDto.complement,
+                neighborhood: createUserDto.neighborhood!,
+                city: createUserDto.city!,
+                state: createUserDto.state!,
+              } : undefined,
+            });
           else if (roleName === 'client')
-            await this.appendClient(userExistente.id, em);
+            await this.appendClient(userExistente.id, em, photoUrl);
 
           const updatedUser = await this.findOne(userExistente.id, em);
           return omitPasswordHash(updatedUser);
@@ -110,16 +141,52 @@ export class UsersService {
           name: createUserDto.nome,
           email: createUserDto.email,
           passwordHash: hash,
+          phone: createUserDto.phone,
+          cpf: createUserDto.cpf || undefined,
         });
 
         const userSalvo = await em.save(User, novoUser);
 
         if (roleName === 'professional')
-          await this.appendProfessional(userSalvo.id, em);
-        else if (roleName === 'client')
-          await this.appendClient(userSalvo.id, em);
+          await this.appendProfessional(userSalvo.id, em, {
+            specialty: createUserDto.specialty,
+            biography: createUserDto.biography,
+            photoUrl,
+          });
+        else if (roleName === 'client') {
+          await this.appendClient(userSalvo.id, em, photoUrl);
+          // Create address for client if provided
+          if (createUserDto.clientZipCode) {
+            const address = em.create(Address, {
+              zipCode: createUserDto.clientZipCode,
+              street: createUserDto.clientStreet!,
+              number: createUserDto.clientNumber!,
+              complement: createUserDto.clientComplement || undefined,
+              neighborhood: createUserDto.clientNeighborhood!,
+              city: createUserDto.clientCity,
+              state: createUserDto.clientState,
+              user: userSalvo,
+            });
+            await em.save(Address, address);
+          }
+        }
         else if (roleName === 'manager')
-          await this.appendManager(userSalvo.id, em);
+          await this.appendManager(userSalvo.id, em, {
+            legalName: createUserDto.legalName,
+            cnpj: createUserDto.cnpj,
+            tradeName: createUserDto.tradeName,
+            phone: createUserDto.businessPhone,
+            photoUrl,
+            address: createUserDto.zipCode ? {
+              zipCode: createUserDto.zipCode!,
+              street: createUserDto.street!,
+              number: createUserDto.addressNumber!,
+              complement: createUserDto.complement,
+              neighborhood: createUserDto.neighborhood!,
+              city: createUserDto.city!,
+              state: createUserDto.state!,
+            } : undefined,
+          });
 
         const savedUser = await this.findOne(userSalvo.id, em);
         return omitPasswordHash(savedUser);
@@ -325,7 +392,7 @@ export class UsersService {
 
   // =========================================================================
 
-  async appendClient(userId: string, transactionManager?: EntityManager) {
+  async appendClient(userId: string, transactionManager?: EntityManager, photoUrl?: string | null) {
     const em = transactionManager || this.usersRepository.manager;
 
     const user = await em.findOne(User, {
@@ -337,11 +404,11 @@ export class UsersService {
 
     await this.ensureRole(user, 'client', em);
 
-    const client = em.create(Client, { user });
+    const client = em.create(Client, { user, photoUrl: photoUrl || undefined });
     return await em.save(Client, client);
   }
 
-  async appendProfessional(userId: string, transactionManager?: EntityManager) {
+  async appendProfessional(userId: string, transactionManager?: EntityManager, profileData?: { specialty?: string; biography?: string; photoUrl?: string | null }) {
     const em = transactionManager || this.usersRepository.manager;
 
     const user = await em.findOne(User, {
@@ -353,11 +420,17 @@ export class UsersService {
 
     await this.ensureRole(user, 'professional', em);
 
-    const professional = em.create(Professional, { user });
+    const professional = em.create(Professional, { 
+      user,
+      specialty: profileData?.specialty || undefined,
+      biography: profileData?.biography || undefined,
+      photoUrl: profileData?.photoUrl || undefined,
+      profileComplete: !!(profileData?.specialty && profileData?.biography),
+    });
     return await em.save(Professional, professional);
   }
 
-  async appendManager(userId: string, transactionManager?: EntityManager) {
+  async appendManager(userId: string, transactionManager?: EntityManager, businessData?: { legalName?: string; cnpj?: string; tradeName?: string; phone?: string; photoUrl?: string | null; address?: { zipCode: string; street: string; number: string; complement?: string; neighborhood: string; city: string; state: string } }) {
     const em = transactionManager || this.usersRepository.manager;
 
     const user = await em.findOne(User, {
@@ -375,11 +448,23 @@ export class UsersService {
     const savedManager = await em.save(Manager, manager);
 
     const business = em.create(Business, {
-      tradeName: `Unidade ${user.name}`,
+      tradeName: businessData?.tradeName || `Unidade ${user.name}`,
+      legalName: businessData?.legalName || undefined,
+      cnpj: businessData?.cnpj || undefined,
+      phone: businessData?.phone || undefined,
+      photoUrl: businessData?.photoUrl || undefined,
       visibilityStatus: false,
       profileComplete: false,
     });
     const savedBusiness = await em.save(Business, business);
+
+    if (businessData?.address) {
+      const address = em.create(Address, {
+        ...businessData.address,
+        business: savedBusiness,
+      });
+      await em.save(Address, address);
+    }
 
     const businessLink = em.create(BusinessManager, {
       manager: savedManager,
