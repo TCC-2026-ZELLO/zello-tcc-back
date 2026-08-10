@@ -32,7 +32,7 @@ export class Appointment {
   @Column()
   endTime: string;
 
-  @Column({ type: 'varchar', default: 'CONFIRMED' })
+  @Column({ type: 'varchar', default: 'PENDING' })
   status: AppointmentStatus;
 
   @ManyToOne(() => User)
