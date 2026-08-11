@@ -64,7 +64,10 @@ export class FilesService {
 
       this.logger.log(`Arquivo salvo no Azure: ${fileName}`);
 
-      return blockBlobClient.url;
+      const safe_url = new URL(blockBlobClient.url);
+      safe_url.search = '';
+
+      return safe_url.toString();
     } catch (err: any) {
       this.logger.error(`Erro no Azure Blob Storage: ${err.message}`);
       throw new InternalServerErrorException(
