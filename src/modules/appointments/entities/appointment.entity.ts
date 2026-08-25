@@ -47,6 +47,15 @@ export class Appointment {
   @ManyToOne(() => Service)
   service: Service;
 
+  @Column({ type: 'text', nullable: true })
+  cancellationReason: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  cancelledByRole: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  confirmedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

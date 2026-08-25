@@ -1,14 +1,38 @@
 services:
+  db-tcc:
+    image: postgres:15-alpine
+    container_name: postgres_container
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   api-tcc:
     build: .
     container_name: nestjs_container
     env_file: .env
+    environment:
+      - DB_HOST=db-tcc
+      - DB_PORT=5432
     restart: always
     ports:
-      - '3000:3000'
+      - '3001:3001'
+    depends_on:
+      db-tcc:
+        condition: service_healthy
     dns:
       - 8.8.8.8
       - 8.8.4.4
-      - 1.1.1.1
 volumes:
   pgdata:

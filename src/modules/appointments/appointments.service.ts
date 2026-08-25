@@ -14,6 +14,7 @@ import { CatalogService } from '../catalog/catalog.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
+import { Client } from '../profiles/clients/entities/client.entity';
 
 @Injectable()
 export class AppointmentsService {
@@ -31,6 +32,9 @@ export class AppointmentsService {
 
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
+
+    @InjectRepository(Client)
+    private readonly clientRepo: Repository<Client>,
   ) {}
 
   async create(
@@ -171,12 +175,31 @@ export class AppointmentsService {
       throw new ForbiddenException(
         'Você não tem permissão para cancelar este agendamento.',
       );
-    if (appointment.status !== 'PENDING')
+    
+    if (appointment.status !== 'PENDING' && appointment.status !== 'CONFIRMED') {
       throw new ForbiddenException(
-        'Apenas agendamentos pendentes podem ser cancelados diretamente.',
+        'Apenas agendamentos pendentes ou confirmados podem ser cancelados.',
       );
+    }
 
-    await this.appointmentRepo.update(id, { status: 'CANCELLED' });
+    if (appointment.status === 'CONFIRMED') {
+      const now = new Date();
+      const appDateTime = new Date(`${appointment.date}T${appointment.startTime}:00-03:00`);
+      
+      const isWithinGracePeriod = appointment.confirmedAt && (now.getTime() - appointment.confirmedAt.getTime() <= 15 * 60 * 1000);
+      const isMoreThan2HoursBefore = (appDateTime.getTime() - now.getTime()) >= 2 * 60 * 60 * 1000;
+
+      if (!isWithinGracePeriod && !isMoreThan2HoursBefore) {
+        throw new ForbiddenException(
+          'O prazo de cancelamento de 2h expirou. Entre em contato com o estabelecimento.',
+        );
+      }
+    }
+
+    await this.appointmentRepo.update(id, { 
+      status: 'CANCELLED',
+      cancelledByRole: 'client'
+    });
   }
 
   async findByClient(clientId: string): Promise<Appointment[]> {
@@ -246,7 +269,7 @@ export class AppointmentsService {
   ): Promise<Appointment> {
     const appointment = await this.appointmentRepo.findOne({
       where: { id },
-      relations: ['business'],
+      relations: ['business', 'client'],
     });
 
     if (!appointment)
@@ -254,7 +277,134 @@ export class AppointmentsService {
 
     await this.validateManagerAuthority(userId, appointment.business.id);
 
+    if (status === 'CONFIRMED') {
+      appointment.confirmedAt = new Date();
+    } else if (status === 'COMPLETED' && appointment.status !== 'COMPLETED') {
+      if (appointment.client) {
+        const clientProfile = await this.clientRepo.findOne({ where: { user: { id: appointment.client.id } } });
+        if (clientProfile) {
+          clientProfile.successStreak = (clientProfile.successStreak || 0) + 1;
+          clientProfile.noShowCount = 0;
+          await this.clientRepo.save(clientProfile);
+        }
+      }
+    }
+
     appointment.status = status;
     return await this.appointmentRepo.save(appointment);
+  }
+
+  async markNoShow(id: string, userId: string): Promise<Appointment> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['business', 'client'],
+    });
+
+    if (!appointment)
+      throw new NotFoundException('Agendamento não encontrado.');
+
+    await this.validateManagerAuthority(userId, appointment.business.id);
+
+    const now = new Date();
+    const appDateTime = new Date(`${appointment.date}T${appointment.startTime}:00-03:00`);
+
+    if (now <= appDateTime) {
+      throw new ForbiddenException('Não é possível marcar No-Show antes do horário do serviço.');
+    }
+
+    if (appointment.status !== 'CONFIRMED' && appointment.status !== 'NO_SHOW') {
+      throw new ForbiddenException('Apenas agendamentos confirmados podem ser marcados como No-Show.');
+    }
+    
+    if (appointment.cancelledByRole !== 'manager_noshow') {
+      if (appointment.client) {
+        const clientProfile = await this.clientRepo.findOne({ where: { user: { id: appointment.client.id } } });
+        if (clientProfile) {
+          clientProfile.noShowCount = (clientProfile.noShowCount || 0) + 1;
+          clientProfile.successStreak = 0;
+          await this.clientRepo.save(clientProfile);
+        }
+      }
+      appointment.status = 'NO_SHOW';
+      appointment.cancelledByRole = 'manager_noshow';
+      return await this.appointmentRepo.save(appointment);
+    }
+
+    return appointment;
+  }
+
+  async revertNoShow(id: string, userId: string): Promise<Appointment> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['business', 'client'],
+    });
+
+    if (!appointment)
+      throw new NotFoundException('Agendamento não encontrado.');
+
+    await this.validateManagerAuthority(userId, appointment.business.id);
+
+    if (appointment.status !== 'NO_SHOW') {
+      throw new ForbiddenException('Apenas agendamentos com status NO_SHOW podem ser revertidos.');
+    }
+
+    if (appointment.client) {
+      const clientProfile = await this.clientRepo.findOne({ where: { user: { id: appointment.client.id } } });
+      if (clientProfile) {
+        if (appointment.cancelledByRole === 'manager_noshow') {
+          clientProfile.noShowCount = Math.max(0, (clientProfile.noShowCount || 0) - 1);
+        } else {
+          clientProfile.successStreak = (clientProfile.successStreak || 0) + 1;
+          clientProfile.noShowCount = 0;
+        }
+        await this.clientRepo.save(clientProfile);
+      }
+    }
+
+    appointment.status = 'COMPLETED'; // Assuming reverting means the client actually showed up and completed
+    appointment.cancelledByRole = null;
+    return await this.appointmentRepo.save(appointment);
+  }
+
+  async cancelJustified(id: string, userId: string, reason: string, affectsReputation: boolean): Promise<Appointment> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['business', 'client'],
+    });
+
+    if (!appointment)
+      throw new NotFoundException('Agendamento não encontrado.');
+
+    await this.validateManagerAuthority(userId, appointment.business.id);
+
+    appointment.status = 'CANCELLED';
+    appointment.cancellationReason = reason;
+
+    if (affectsReputation) {
+      appointment.cancelledByRole = 'manager';
+      if (appointment.client) {
+        const clientProfile = await this.clientRepo.findOne({ where: { user: { id: appointment.client.id } } });
+        if (clientProfile) {
+          clientProfile.noShowCount = (clientProfile.noShowCount || 0) + 1;
+          clientProfile.successStreak = 0;
+          await this.clientRepo.save(clientProfile);
+        }
+      }
+    } else {
+      appointment.cancelledByRole = 'manager_justified';
+    }
+
+    return await this.appointmentRepo.save(appointment);
+  }
+
+  async getClientReputation(id: string): Promise<{ noShowCount: number; successStreak: number }> {
+    const client = await this.clientRepo.findOne({
+      where: [{ id }, { user: { id } }],
+    });
+    if (!client) throw new NotFoundException('Perfil de cliente não encontrado.');
+    return {
+      noShowCount: client.noShowCount || 0,
+      successStreak: client.successStreak || 0,
+    };
   }
 }

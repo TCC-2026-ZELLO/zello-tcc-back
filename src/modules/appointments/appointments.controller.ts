@@ -14,6 +14,7 @@ import {
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
+import { CancelJustifiedDto } from './dto/cancel-justified.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -104,5 +105,62 @@ export class AppointmentsController {
       message: `Status atualizado para ${dto.status}`,
       data: appointment,
     };
+  }
+
+  @Patch(':id/no-show')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Registrar No-Show de um cliente (Gestor)' })
+  async markNoShow(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const appointment = await this.appointmentsService.markNoShow(id, req.user.id);
+    return {
+      message: 'No-Show registrado com sucesso.',
+      data: appointment,
+    };
+  }
+
+  @Patch(':id/revert-no-show')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Reverter um No-Show (Gestor)' })
+  async revertNoShow(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const appointment = await this.appointmentsService.revertNoShow(id, req.user.id);
+    return {
+      message: 'No-Show revertido com sucesso.',
+      data: appointment,
+    };
+  }
+
+  @Patch(':id/cancel-justified')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Cancelar agendamento justificadamente (Gestor)' })
+  async cancelJustified(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelJustifiedDto,
+  ) {
+    const appointment = await this.appointmentsService.cancelJustified(
+      id,
+      req.user.id,
+      dto.reason,
+      dto.affectsReputation || false,
+    );
+    return {
+      message: 'Cancelamento efetuado com sucesso.',
+      data: appointment,
+    };
+  }
+
+  @Get('client/:clientId/reputation')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Consultar reputação de um cliente' })
+  async getClientReputation(
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return await this.appointmentsService.getClientReputation(clientId);
   }
 }
