@@ -3,8 +3,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import type { AppointmentStatus } from '../entities/appointment.entity';
 
 export class UpdateAppointmentStatusDto {
-  @ApiProperty({ description: 'O novo status do agendamento (ex: CONFIRMED ou CANCELLED)' })
+  @ApiProperty({ description: 'O novo status do agendamento (ex: CONFIRMED ou COMPLETED)' })
   @IsNotEmpty()
-  @IsEnum(['CONFIRMED', 'CANCELLED', 'COMPLETED', 'PENDING'])
+  @IsEnum(['CONFIRMED', 'COMPLETED'])
   status!: AppointmentStatus;
 }

@@ -46,4 +46,39 @@ export class AppointmentsCronService {
       }
     }
   }
+
+  // Roda a cada 5 minutos para marcar NO_SHOW automático em agendamentos finalizados há mais de 60 minutos
+  @Cron('*/5 * * * *')
+  async markAutoNoShowAppointments() {
+    this.logger.debug(
+      'Executando cron de verificação de no-show automático...',
+    );
+
+    const now = new Date();
+    // A margem é de 60 minutos APÓS o horário de fim do serviço.
+    const marginMs = 60 * 60 * 1000; 
+    const thresholdDate = new Date(now.getTime() - marginMs);
+
+    const confirmedAppointments = await this.appointmentRepo.find({
+      where: { status: 'CONFIRMED' },
+    });
+
+    for (const app of confirmedAppointments) {
+      if (!app.date || !app.endTime) continue;
+
+      const appEndDateTime = new Date(`${app.date}T${app.endTime}:00-03:00`);
+
+      // Se thresholdDate for maior que o horário de término do serviço, significa que
+      // já se passaram mais de 60 minutos desde o fim.
+      if (thresholdDate >= appEndDateTime) {
+        this.logger.log(
+          `Marcando agendamento ${app.id} como NO_SHOW automático (sem alterar reputação).`,
+        );
+        await this.appointmentRepo.update(app.id, { 
+          status: 'NO_SHOW',
+          cancelledByRole: 'cron_auto',
+        });
+      }
+    }
+  }
 }

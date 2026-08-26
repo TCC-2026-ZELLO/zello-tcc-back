@@ -8,10 +8,11 @@ import { CatalogModule } from '../catalog/catalog.module';
 import { AvailabilityModule } from '../availability/availability.module';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
+import { Client } from '../profiles/clients/entities/client.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Appointment, BusinessManager, Manager]),
+    TypeOrmModule.forFeature([Appointment, BusinessManager, Manager, Client]),
     CatalogModule,
     forwardRef(() => AvailabilityModule),
   ],
