@@ -5,9 +5,17 @@ import {
   OneToOne,
   JoinColumn,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Business } from '../../businesses/entities/business.entity';
+
+/** Converte a string retornada pelo driver `pg` para colunas decimal/numeric em number. */
+const decimalTransformer = {
+  to: (value?: number | null): number | null | undefined => value,
+  from: (value: string | null): number | null =>
+    value === null || value === undefined ? null : parseFloat(value),
+};
 
 @Entity('address')
 export class Address {
@@ -45,4 +53,35 @@ export class Address {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
+
+  @Column({
+    name: 'latitude',
+    type: 'decimal',
+    precision: 10,
+    scale: 7,
+    nullable: true,
+    transformer: decimalTransformer,
+  })
+  latitude: number | null;
+
+  @Column({
+    name: 'longitude',
+    type: 'decimal',
+    precision: 10,
+    scale: 7,
+    nullable: true,
+    transformer: decimalTransformer,
+  })
+  longitude: number | null;
+
+
+  @Index('IDX_address_location_gist', { spatial: true })
+  @Column({
+    name: 'location',
+    type: 'geography',
+    spatialFeatureType: 'Point',
+    srid: 4326,
+    nullable: true,
+  })
+  location: string | null;
 }

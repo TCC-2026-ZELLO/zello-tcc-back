@@ -23,6 +23,7 @@ import { BusinessManagersModule } from './modules/business-managers/business-man
 import { FilesModule } from './modules/files/files.module';
 import { FilesService } from './modules/files/files.service';
 import { AddressesModule } from './modules/addresses/addresses.module';
+import { ServicesLocationModule } from './modules/services-location/services-location.module';
 import { LookupController } from './common/controllers/lookup.controller';
 import { ViaCepService } from './common/services/viacep.service';
 import { CnpjLookupService } from './common/services/cnpj-lookup.service';
@@ -76,6 +77,7 @@ import { CnpjLookupService } from './common/services/cnpj-lookup.service';
     BusinessManagersModule,
     FilesModule,
     AddressesModule,
+    ServicesLocationModule,
   ],
   controllers: [AppController, LookupController],
   providers: [

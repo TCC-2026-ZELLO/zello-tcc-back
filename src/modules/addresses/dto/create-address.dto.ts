@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { IsLatitude, IsLongitude, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAddressDto {
@@ -37,4 +38,26 @@ export class CreateAddressDto {
   @IsString()
   @Length(2, 2, { message: 'O estado deve ter 2 caracteres.' })
   state!: string;
+
+  @ApiProperty({
+    description:
+      'Latitude geocodificada do endereço (necessária para aparecer na busca por geolocalização).',
+    example: -25.4284,
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsLatitude({ message: 'A latitude informada é inválida.' })
+  latitude?: number;
+
+  @ApiProperty({
+    description:
+      'Longitude geocodificada do endereço (necessária para aparecer na busca por geolocalização).',
+    example: -49.2733,
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsLongitude({ message: 'A longitude informada é inválida.' })
+  longitude?: number;
 }

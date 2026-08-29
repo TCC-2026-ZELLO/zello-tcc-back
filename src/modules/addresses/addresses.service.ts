@@ -16,7 +16,9 @@ export class AddressesService {
       ...data,
       business: { id: businessId },
     });
-    return manager.save(address);
+    const saved = await manager.save(address);
+    await this.syncLocation(saved.id, data.latitude, data.longitude, manager);
+    return saved;
   }
 
   async createForUser(userId: string, data: Partial<Address>, em?: EntityManager): Promise<Address> {
@@ -25,7 +27,27 @@ export class AddressesService {
       ...data,
       user: { id: userId },
     });
-    return manager.save(address);
+    const saved = await manager.save(address);
+    await this.syncLocation(saved.id, data.latitude, data.longitude, manager);
+    return saved;
+  }
+
+  private async syncLocation(
+    addressId: string,
+    latitude: number | null | undefined,
+    longitude: number | null | undefined,
+    manager: EntityManager,
+  ): Promise<void> {
+    if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
+      return;
+    }
+
+    await manager.query(
+      `UPDATE address
+       SET location = ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+       WHERE id = $3`,
+      [longitude, latitude, addressId],
+    );
   }
 
   async findByBusinessId(businessId: string): Promise<Address | null> {
@@ -42,6 +64,7 @@ export class AddressesService {
 
   async update(id: string, data: Partial<Address>): Promise<Address | null> {
     await this.addressesRepository.update(id, data);
+    await this.syncLocation(id, data.latitude, data.longitude, this.addressesRepository.manager);
     return this.addressesRepository.findOne({ where: { id } });
   }
 }
