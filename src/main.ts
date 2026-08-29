@@ -58,7 +58,7 @@ async function bootstrap() {
 
   const allowedOrigins = (
     process.env.CORS_ALLOWED_ORIGINS ??
-    'http://localhost:5173,http://localhost:3000,http://localhost:4000'
+    'http://localhost:5173,http://localhost:3000,http://localhost:4000,http://localhost:3001'
   )
     .split(',')
     .map((origin) => origin.trim())

@@ -14,6 +14,10 @@ import {
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
+import {
+  RescheduleAppointmentDto,
+  RespondRescheduleDto,
+} from './dto/reschedule-appointment.dto';
 import { CancelJustifiedDto } from './dto/cancel-justified.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
@@ -78,6 +82,65 @@ export class AppointmentsController {
     return { message: 'Agendamento cancelado com sucesso' };
   }
 
+  @Patch(':id/reschedule')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Reagendar um atendimento (Cliente)' })
+  async reschedule(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RescheduleAppointmentDto,
+  ) {
+    const appointment = await this.appointmentsService.rescheduleByClient(
+      id,
+      req.user.id,
+      dto,
+    );
+    return {
+      message: 'Agendamento remarcado com sucesso',
+      data: appointment,
+    };
+  }
+
+  @Post(':id/reschedule-proposal')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Propor um novo horário ao cliente (Gestor)' })
+  async proposeReschedule(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RescheduleAppointmentDto,
+  ) {
+    const appointment = await this.appointmentsService.proposeReschedule(
+      id,
+      req.user.id,
+      dto,
+    );
+    return {
+      message: 'Proposta enviada ao cliente',
+      data: appointment,
+    };
+  }
+
+  @Patch(':id/reschedule-proposal')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Aceitar ou recusar a proposta de novo horário (Cliente)',
+  })
+  async respondToProposal(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RespondRescheduleDto,
+  ) {
+    const appointment = await this.appointmentsService.respondToProposal(
+      id,
+      req.user.id,
+      dto.accept,
+    );
+    return {
+      message: dto.accept ? 'Novo horário confirmado' : 'Proposta recusada',
+      data: appointment,
+    };
+  }
+
   @Get('business/:businessId')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Listar agendamentos de uma empresa (Gestor)' })
@@ -114,7 +177,10 @@ export class AppointmentsController {
     @Request() req: { user: ActiveUser },
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const appointment = await this.appointmentsService.markNoShow(id, req.user.id);
+    const appointment = await this.appointmentsService.markNoShow(
+      id,
+      req.user.id,
+    );
     return {
       message: 'No-Show registrado com sucesso.',
       data: appointment,
@@ -128,7 +194,10 @@ export class AppointmentsController {
     @Request() req: { user: ActiveUser },
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const appointment = await this.appointmentsService.revertNoShow(id, req.user.id);
+    const appointment = await this.appointmentsService.revertNoShow(
+      id,
+      req.user.id,
+    );
     return {
       message: 'No-Show revertido com sucesso.',
       data: appointment,
