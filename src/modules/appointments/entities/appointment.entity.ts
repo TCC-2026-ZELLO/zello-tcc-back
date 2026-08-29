@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   CreateDateColumn,
+  UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
@@ -17,6 +18,9 @@ export type AppointmentStatus =
   | 'CANCELLED'
   | 'NO_SHOW'
   | 'COMPLETED';
+
+export const MAX_RESCHEDULES = 2;
+export const ACTIVE_STATUSES: AppointmentStatus[] = ['PENDING', 'CONFIRMED'];
 
 @Entity('appointments')
 export class Appointment {
@@ -47,8 +51,30 @@ export class Appointment {
   @ManyToOne(() => Service)
   service: Service;
 
+  @Column({ type: 'int', default: 0 })
+  rescheduleCount: number;
+
+  @Column({ type: 'date', nullable: true })
+  proposedDate: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  proposedStartTime: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  proposedEndTime: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  proposedBy: User | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  proposedAt: Date | null;
+
+
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 
   @DeleteDateColumn()
   deletedAt: Date;
