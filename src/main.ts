@@ -65,11 +65,16 @@ async function bootstrap() {
     .filter((origin) => origin.length > 0);
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.startsWith('http://localhost') ||
+        origin.startsWith('http://127.0.0.1')
+      ) {
         return callback(null, true);
       }
 
-      return callback(new Error('Not allowed by CORS'), false);
+      return callback(new Error(`Not allowed by CORS: ${origin}`), false);
     },
     credentials: true,
   });

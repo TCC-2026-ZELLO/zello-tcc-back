@@ -48,6 +48,9 @@ export class Professional {
   @Column({ name: 'average_rating', type: 'float', default: 5.0 })
   averageRating: number;
 
+  @Column({ name: 'review_count', type: 'int', default: 0 })
+  reviewCount: number;
+
   @OneToMany(() => PortfolioImage, (pi) => pi.professional)
   portfolioImages: PortfolioImage[];
 

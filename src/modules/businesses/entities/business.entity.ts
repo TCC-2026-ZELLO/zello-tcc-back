@@ -60,4 +60,10 @@ export class Business {
 
   @Column({ name: 'profile_complete', default: false })
   profileComplete: boolean;
+
+  @Column({ name: 'average_rating', type: 'float', default: 5.0 })
+  averageRating: number;
+
+  @Column({ name: 'review_count', type: 'int', default: 0 })
+  reviewCount: number;
 }
