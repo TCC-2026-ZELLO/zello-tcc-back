@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AvailabilityService } from './availability.service';
 
-describe('AvailabilityService', () => {
+describe('AvailabilityComboService', () => {
   let service: AvailabilityService;
 
   beforeEach(async () => {

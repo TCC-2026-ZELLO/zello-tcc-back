@@ -42,16 +42,20 @@ export class AppointmentsController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary:
-      'Listar agendamentos com filtros (date, businessId, professionalId)',
+      'Listar agendamentos com filtros (date ou dateFrom+dateTo, businessId, professionalId)',
   })
   async findAll(
     @Request() req: { user: ActiveUser },
     @Query('date') date?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
     @Query('businessId') businessId?: string,
     @Query('professionalId') professionalId?: string,
   ) {
     return this.appointmentsService.findAll(req.user.id, {
       date,
+      dateFrom,
+      dateTo,
       businessId,
       professionalId,
     });
