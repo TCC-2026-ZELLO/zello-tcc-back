@@ -26,6 +26,7 @@ import { AddressesModule } from './modules/addresses/addresses.module';
 import { LookupController } from './common/controllers/lookup.controller';
 import { ViaCepService } from './common/services/viacep.service';
 import { CnpjLookupService } from './common/services/cnpj-lookup.service';
+import { CombosModule } from './modules/combos/combos.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { CnpjLookupService } from './common/services/cnpj-lookup.service';
     BusinessManagersModule,
     FilesModule,
     AddressesModule,
+    CombosModule,
   ],
   controllers: [AppController, LookupController],
   providers: [

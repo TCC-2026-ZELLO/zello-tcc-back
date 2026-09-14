@@ -16,6 +16,9 @@ import {
   FindOptionsWhere,
   DataSource,
   EntityManager,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
 } from 'typeorm';
 
 import {
@@ -731,7 +734,13 @@ export class AppointmentsService {
 
   async findAll(
     userId: string,
-    params: { date?: string; businessId?: string; professionalId?: string },
+    params: {
+      date?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      businessId?: string;
+      professionalId?: string;
+    },
   ): Promise<Appointment[]> {
     const where: FindOptionsWhere<Appointment> = {};
 
@@ -740,7 +749,16 @@ export class AppointmentsService {
       where.business = { id: params.businessId };
     }
 
-    if (params.date) where.date = params.date;
+    if (params.date) {
+      where.date = params.date;
+    } else if (params.dateFrom && params.dateTo) {
+      where.date = Between(params.dateFrom, params.dateTo);
+    } else if (params.dateFrom) {
+      where.date = MoreThanOrEqual(params.dateFrom);
+    } else if (params.dateTo) {
+      where.date = LessThanOrEqual(params.dateTo);
+    }
+
     if (params.professionalId) {
       where.professional = { id: params.professionalId };
     }
@@ -748,7 +766,7 @@ export class AppointmentsService {
     return await this.appointmentRepo.find({
       where,
       relations: ['client', 'professional', 'professional.user', 'service'],
-      order: { startTime: 'ASC' },
+      order: { date: 'ASC', startTime: 'ASC' },
     });
   }
 

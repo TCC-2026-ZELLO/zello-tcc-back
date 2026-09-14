@@ -11,6 +11,7 @@ import { User } from '../../users/entities/user.entity';
 import { Business } from '../../businesses/entities/business.entity';
 import { Service } from '../../catalog/entities/service.entity';
 import { Professional } from '../../profiles/professionals/entities/professional.entity';
+import { AppointmentGroup } from '../../combos/entities/appointment-group.entity';
 
 export type AppointmentStatus =
   | 'PENDING'
@@ -51,6 +52,15 @@ export class Appointment {
   @ManyToOne(() => Service)
   service: Service;
 
+  @ManyToOne(() => AppointmentGroup, (group) => group.appointments, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
+  group: AppointmentGroup | null;
+
+  @Column({ type: 'int', default: 0 })
+  sequence: number;
+
   @Column({ type: 'int', default: 0 })
   rescheduleCount: number;
 
@@ -68,7 +78,6 @@ export class Appointment {
 
   @Column({ type: 'timestamptz', nullable: true })
   proposedAt: Date | null;
-
 
   @Column({ type: 'text', nullable: true })
   cancellationReason: string | null;
