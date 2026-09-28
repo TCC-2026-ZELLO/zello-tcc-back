@@ -24,6 +24,8 @@ import { ActiveUser } from '../auth/interfaces/active-user.interface';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { Professional } from '../profiles/professionals/entities/professional.entity';
+import { Business } from '../businesses/entities/business.entity';
+import { BusinessProfessional } from '../business-professionals/entities/business-professional.entity';
 
 @Injectable()
 export class AvailabilityService {
@@ -40,10 +42,19 @@ export class AvailabilityService {
     private readonly managerRepo: Repository<Manager>,
     @InjectRepository(Professional)
     private readonly profRepo: Repository<Professional>,
+    @InjectRepository(Business)
+    private readonly businessRepo: Repository<Business>,
 
     private readonly catalogService: CatalogService,
     private readonly appointmentsService: AppointmentsService,
   ) {}
+
+  async getOperatingHours(businessId: string) {
+    return await this.operatingHourRepo.find({
+      where: { business: { id: businessId } },
+      order: { dayOfWeek: 'ASC' },
+    });
+  }
 
   async createOperatingHour(
     dto: CreateBusinessOperatingHourDto,
@@ -64,16 +75,85 @@ export class AvailabilityService {
       });
     }
 
-    return await this.operatingHourRepo.save(hour);
+    const savedHour = await this.operatingHourRepo.save(hour);
+
+    // Ajustar os turnos dos profissionais
+    const shifts = await this.shiftRepo
+      .createQueryBuilder('shift')
+      .leftJoinAndSelect('shift.businessProfessional', 'bp')
+      .leftJoinAndSelect('bp.business', 'business')
+      .where('shift.dayOfWeek = :dayOfWeek', { dayOfWeek: dto.dayOfWeek })
+      .andWhere('business.id = :businessId', { businessId: dto.businessId })
+      .getMany();
+
+    if (!savedHour.isOpen) {
+      if (shifts.length > 0) {
+        await this.shiftRepo.remove(shifts);
+      }
+    } else {
+      const shiftsToUpdate: ProfessionalShift[] = [];
+
+      for (const shift of shifts) {
+        shift.startTime = savedHour.startTime;
+        shift.endTime = savedHour.endTime;
+        shiftsToUpdate.push(shift);
+      }
+
+      if (shiftsToUpdate.length > 0) await this.shiftRepo.save(shiftsToUpdate);
+    }
+
+    return savedHour;
   }
 
   async createShift(dto: CreateProfessionalShiftDto) {
-    const { businessProfessionalId, ...rest } = dto;
+    const { businessProfessionalId } = dto;
+
+    const bp = await this.shiftRepo.manager.findOne(BusinessProfessional, {
+      where: { id: businessProfessionalId },
+      relations: ['business'],
+    });
+
+    if (!bp) {
+      throw new BadRequestException('Vínculo de profissional não encontrado.');
+    }
+
+    const businessHour = await this.operatingHourRepo.findOne({
+      where: { business: { id: bp.business.id }, dayOfWeek: dto.dayOfWeek },
+    });
+
+    if (!businessHour || !businessHour.isOpen) {
+      throw new BadRequestException('A empresa não tem expediente neste dia.');
+    }
+
+    const bizStart = this.timeToMins(businessHour.startTime);
+    const bizEnd = this.timeToMins(businessHour.endTime);
+    const shiftStart = this.timeToMins(dto.startTime);
+    const shiftEnd = this.timeToMins(dto.endTime);
+
+    const finalStart = Math.max(bizStart, shiftStart);
+    const finalEnd = Math.min(bizEnd, shiftEnd);
+
+    if (finalStart >= finalEnd) {
+      throw new BadRequestException(
+        'O turno informado está fora do horário de funcionamento da empresa.',
+      );
+    }
+
+    const formatTime = (mins: number) => {
+      const h = Math.floor(mins / 60)
+        .toString()
+        .padStart(2, '0');
+      const m = (mins % 60).toString().padStart(2, '0');
+      return `${h}:${m}:00`;
+    };
 
     const shift = this.shiftRepo.create({
-      ...rest,
+      dayOfWeek: dto.dayOfWeek,
+      startTime: formatTime(finalStart),
+      endTime: formatTime(finalEnd),
       businessProfessional: { id: businessProfessionalId },
     });
+
     return await this.shiftRepo.save(shift);
   }
 
@@ -249,6 +329,45 @@ export class AvailabilityService {
       .padStart(2, '0');
     const m = (mins % 60).toString().padStart(2, '0');
     return `${h}:${m}`;
+  }
+
+  private async getNowInBusinessTimezone(
+    businessId: string,
+  ): Promise<{ dateStr: string; minutesSinceMidnight: number }> {
+    const business = await this.businessRepo.findOne({
+      where: { id: businessId },
+      select: ['id', 'timezone'],
+    });
+
+    return this.getZonedNow(business?.timezone || 'America/Sao_Paulo');
+  }
+
+  private getZonedNow(timeZone: string): {
+    dateStr: string;
+    minutesSinceMidnight: number;
+  } {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date());
+
+    const values: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') values[part.type] = part.value;
+    }
+
+    // Algumas implementações representam meia-noite como "24" quando hour12 é falso.
+    const hour = values.hour === '24' ? 0 : Number(values.hour);
+
+    return {
+      dateStr: `${values.year}-${values.month}-${values.day}`,
+      minutesSinceMidnight: hour * 60 + Number(values.minute),
+    };
   }
 
   async getAvailableBounds(
@@ -439,14 +558,13 @@ export class AvailabilityService {
       ([start, end]) => end - start >= totalTime,
     );
 
-    // Filtra horários que já passaram e exige 30 min de antecedência caso a data seja hoje
-    const now = new Date();
-    const isToday =
-      targetDate.getUTCFullYear() === now.getFullYear() &&
-      targetDate.getUTCMonth() === now.getMonth() &&
-      targetDate.getUTCDate() === now.getDate();
+    // Filtra horários que já passaram e exige 30 min de antecedência caso a
+    // data seja hoje — "hoje" e "agora" são calculados no fuso horário do
+    // estabelecimento, não no do servidor ou do cliente (RF16/AC5).
+    const { dateStr: todayInBusinessTz, minutesSinceMidnight: currentMins } =
+      await this.getNowInBusinessTimezone(businessId);
 
-    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const isToday = date === todayInBusinessTz;
 
     let finalBounds = validBounds;
     if (isToday) {
@@ -457,7 +575,7 @@ export class AvailabilityService {
           return [adjustedStart, end] as [number, number];
         })
         .filter(([start, end]) => end - start >= totalTime);
-    } else if (targetDate < new Date(now.setHours(0, 0, 0, 0))) {
+    } else if (date < todayInBusinessTz) {
       // Data no passado
       finalBounds = [];
     }
@@ -491,6 +609,17 @@ export class AvailabilityService {
       where: { businessProfessional: { id: businessProfessionalId } },
     });
   }
+
+  async getBusinessProfessionalIds(businessId: string): Promise<string[]> {
+    const shifts = await this.shiftRepo.find({
+      where: {
+        businessProfessional: { business: { id: businessId } },
+      },
+      relations: ['businessProfessional', 'businessProfessional.professional'],
+    });
+
+    return [
+      ...new Set(shifts.map((s) => s.businessProfessional.professional.id)),
+    ];
+  }
 }
-
-

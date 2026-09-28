@@ -66,4 +66,11 @@ export class Business {
 
   @Column({ name: 'average_rating', type: 'float', default: 5.0 })
   averageRating: number;
+  @Column({ name: 'timezone', default: 'America/Sao_Paulo' })
+  timezone: string;
+  @Column({ name: 'average_rating', type: 'float', default: 5.0 })
+  averageRating: number;
+
+  @Column({ name: 'review_count', type: 'int', default: 0 })
+  reviewCount: number;
 }

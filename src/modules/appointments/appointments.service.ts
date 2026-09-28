@@ -5,15 +5,64 @@ import {
   forwardRef,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, FindOptionsWhere } from 'typeorm';
+import {
+  Repository,
+  In,
+  FindOptionsWhere,
+  EntityManager,
+  DataSource,
+} from 'typeorm';
 import { Appointment, AppointmentStatus } from './entities/appointment.entity';
+  Not,
+  FindOptionsWhere,
+  DataSource,
+  EntityManager,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
+} from 'typeorm';
+
+import {
+  Appointment,
+  AppointmentStatus,
+  ACTIVE_STATUSES,
+  MAX_RESCHEDULES,
+} from './entities/appointment.entity';
+import {
+  AppointmentReschedule,
+  RescheduleInitiator,
+} from './entities/appointment-reschedule.entity';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
+
 import { CatalogService } from '../catalog/catalog.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
+import { Client } from '../profiles/clients/entities/client.entity';
+import { User } from '../users/entities/user.entity';
+
+export interface AppointmentSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
+const RESCHEDULE_RELATIONS = [
+  'client',
+  'professional',
+  'professional.user',
+  'business',
+  'service',
+];
+
+const BUSINESS_UTC_OFFSET = '-03:00';
+const CANCEL_GRACE_PERIOD_MS = 15 * 60 * 1000;
+const CANCEL_MIN_NOTICE_MS = 2 * 60 * 60 * 1000;
 
 @Injectable()
 export class AppointmentsService {
@@ -31,6 +80,11 @@ export class AppointmentsService {
 
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
+
+    @InjectRepository(Client)
+    private readonly clientRepo: Repository<Client>,
+
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(
@@ -41,38 +95,125 @@ export class AppointmentsService {
       dto.serviceId,
     );
 
-    let targetProfessionalId = dto.professionalId;
+    const startMins = this.timeToMins(dto.startTime);
+    const endMins = startMins + totalTime;
 
-    if (!targetProfessionalId) {
-      const shifts = await this.availabilityService['shiftRepo'].find({
-        where: {
-          businessProfessional: { business: { id: dto.businessId } },
-        },
-        relations: [
-          'businessProfessional',
-          'businessProfessional.professional',
-        ],
+    const targetProfessionalId = await this.resolveTargetProfessional(
+      dto,
+      startMins,
+      endMins,
+    );
+
+    // Transação + lock por (profissional, data): garante que, mesmo que duas
+    // requisições passem pela validação de disponibilidade quase ao mesmo
+    // tempo, apenas a primeira a confirmar consiga reservar o horário — a
+    // segunda é bloqueada até a primeira concluir e então recebe ConflictException
+    // ao perceber que o slot já não está mais livre (AC2).
+    return await this.dataSource.transaction(async (manager) => {
+      await this.lockProfessionalSchedule(
+        manager,
+        targetProfessionalId,
+        dto.date,
+      );
+
+      await this.assertNoOverlap(
+        manager,
+        targetProfessionalId,
+        dto.date,
+        startMins,
+        endMins,
+      );
+
+      const appointment = manager.create(Appointment, {
+        date: dto.date,
+        startTime: dto.startTime,
+        endTime: this.minsToTime(endMins),
+        client: { id: clientId },
+        professional: { id: targetProfessionalId },
+        business: { id: dto.businessId },
+        service: { id: dto.serviceId },
+        status: 'PENDING',
       });
+
+      return await manager.save(Appointment, appointment);
+    });
+  }
+
+  /**
+   * Determina o profissional que atenderá o agendamento: usa o informado no
+   * DTO (validando disponibilidade) ou, se ausente, procura o primeiro
+   * profissional da empresa livre no horário solicitado.
+   */
+  private async resolveTargetProfessional(
+    dto: CreateAppointmentDto,
+    startMins: number,
+    endMins: number,
+  ): Promise<string> {
+    if (dto.professionalId) {
+      await this.ensureSlotIsAvailable(
+        dto.date,
+        dto.businessId,
+        dto.serviceId,
+        dto.professionalId,
+        startMins,
+        endMins,
+      );
+      return dto.professionalId;
+    }
+
+    const profIds = await this.availabilityService.getBusinessProfessionalIds(
+      dto.businessId,
+    );
+
+    for (const professionalId of profIds) {
+      const isFree = await this.isSlotFree(
+        dto.date,
+        dto.businessId,
+        dto.serviceId,
+        professionalId,
+        startMins,
+        endMins,
+      );
+
+      if (isFree) return professionalId;
+    }
+
+    throw new ConflictException(
+      'Nenhum profissional está disponível neste horário.',
+    );
+  }
+
+  private async isSlotFree(
+    date: string,
+    businessId: string,
+    serviceId: string,
+    professionalId: string,
+    startMins: number,
+    endMins: number,
+  ): Promise<boolean> {
+    const availableBounds = await this.availabilityService.getAvailableBounds(
+      date,
+      businessId,
+      serviceId,
+      professionalId,
+    );
+
+    return availableBounds.some((bound) => {
+      const boundStart = this.timeToMins(bound.start);
+      const boundEnd = this.timeToMins(bound.end);
+      return startMins >= boundStart && endMins <= boundEnd;
       const profIds = [
         ...new Set(shifts.map((s) => s.businessProfessional.professional.id)),
       ];
 
       for (const pId of profIds) {
-        const pBounds = await this.availabilityService.getAvailableBounds(
-          dto.date,
-          dto.businessId,
-          dto.serviceId,
-          pId,
-        );
-
-        const startMins = this.timeToMins(dto.startTime);
-        const endMins = startMins + totalTime;
-
-        const isFree = pBounds.some((bound) => {
-          return (
-            startMins >= this.timeToMins(bound.start) &&
-            endMins <= this.timeToMins(bound.end)
-          );
+        const isFree = await this.isWithinAvailableBounds({
+          date: dto.date,
+          businessId: dto.businessId,
+          serviceId: dto.serviceId,
+          professionalId: pId,
+          startTime: dto.startTime,
+          durationMinutes: totalTime,
         });
 
         if (isFree) {
@@ -88,39 +229,414 @@ export class AppointmentsService {
       }
     }
 
-    const availableBounds = await this.availabilityService.getAvailableBounds(
-      dto.date,
-      dto.businessId,
-      dto.serviceId,
-      targetProfessionalId,
+    const isValid = await this.isWithinAvailableBounds({
+      date: dto.date,
+      businessId: dto.businessId,
+      serviceId: dto.serviceId,
+      professionalId: targetProfessionalId,
+      startTime: dto.startTime,
+      durationMinutes: totalTime,
+    });
+  }
+
+  private async ensureSlotIsAvailable(
+    date: string,
+    businessId: string,
+    serviceId: string,
+    professionalId: string,
+    startMins: number,
+    endMins: number,
+  ): Promise<void> {
+    const isFree = await this.isSlotFree(
+      date,
+      businessId,
+      serviceId,
+      professionalId,
+      startMins,
+      endMins,
     );
 
-    const startMins = this.timeToMins(dto.startTime);
-    const endMins = startMins + totalTime;
-
-    const isValid = availableBounds.some((bound) => {
-      const boundStart = this.timeToMins(bound.start);
-      const boundEnd = this.timeToMins(bound.end);
-      return startMins >= boundStart && endMins <= boundEnd;
-    });
-
-    if (!isValid) {
+    if (!isFree) {
       throw new ConflictException(
         'O horário selecionado não está mais disponível.',
       );
     }
+  }
 
+  /**
+   * Serializa criações concorrentes de agendamento para o mesmo profissional
+   * e data via advisory lock do Postgres, liberado automaticamente ao final
+   * da transação (commit ou rollback).
+   */
+  private async lockProfessionalSchedule(
+    manager: EntityManager,
+    professionalId: string,
+    date: string,
+  ): Promise<void> {
+    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+      `${professionalId}:${date}`,
+    ]);
+  }
+
+  /**
+   * Revalida, já dentro da transação travada, se o horário ainda está livre —
+   * cobre o caso de outra reserva ter sido confirmada entre a validação
+   * inicial e a obtenção do lock (AC2).
+   */
+  private async assertNoOverlap(
+    manager: EntityManager,
+    professionalId: string,
+    date: string,
+    startMins: number,
+    endMins: number,
+  ): Promise<void> {
+    const existingAppointments = await manager.find(Appointment, {
+      where: {
+        professional: { id: professionalId },
+        date,
+        status: In(['PENDING', 'CONFIRMED']),
+      },
+      select: ['id', 'startTime', 'endTime'],
+    });
+
+    const hasConflict = existingAppointments.some((app) => {
+      const appStart = this.timeToMins(app.startTime);
+      const appEnd = this.timeToMins(app.endTime);
+      return Math.max(startMins, appStart) < Math.min(endMins, appEnd);
+    });
+
+    if (hasConflict) {
+      throw new ConflictException(
+        'O horário selecionado não está mais disponível.',
+      );
+    }
     const appointment = this.appointmentRepo.create({
       date: dto.date,
       startTime: dto.startTime,
-      endTime: this.minsToTime(endMins),
+      endTime: this.minsToTime(this.timeToMins(dto.startTime) + totalTime),
       client: { id: clientId },
       professional: { id: targetProfessionalId },
       business: { id: dto.businessId },
       service: { id: dto.serviceId },
       status: 'PENDING',
     });
+
     return await this.appointmentRepo.save(appointment);
+  }
+
+  async rescheduleByClient(
+    id: string,
+    userId: string,
+    dto: RescheduleAppointmentDto,
+  ): Promise<Appointment> {
+    return this.dataSource.transaction(async (manager) => {
+      const appointment = await this.loadForReschedule(manager, id);
+
+      if (appointment.client.id !== userId) {
+        throw new ForbiddenException(
+          'Você não pode reagendar este atendimento.',
+        );
+      }
+
+      this.assertReschedulable(appointment);
+      this.assertLimitNotReached(appointment);
+
+      return this.applyReschedule(manager, appointment, dto, 'CLIENT', userId);
+    });
+  }
+
+  async proposeReschedule(
+    id: string,
+    managerUserId: string,
+    dto: RescheduleAppointmentDto,
+  ): Promise<Appointment> {
+    return this.dataSource.transaction(async (manager) => {
+      const appointment = await this.loadForReschedule(manager, id);
+
+      await this.validateManagerAuthority(
+        managerUserId,
+        appointment.business.id,
+      );
+
+      this.assertReschedulable(appointment);
+      this.assertLimitNotReached(appointment);
+
+      const proposed = await this.resolveSlot(appointment, dto);
+
+      if (this.isSameSlot(appointment, proposed)) {
+        throw new BadRequestException('O horário proposto é igual ao atual.');
+      }
+
+      await this.assertSlotIsAvailable(manager, appointment, proposed);
+
+      appointment.proposedDate = proposed.date;
+      appointment.proposedStartTime = proposed.startTime;
+      appointment.proposedEndTime = proposed.endTime;
+      appointment.proposedBy = { id: managerUserId } as User;
+      appointment.proposedAt = new Date();
+
+      return manager.save(Appointment, appointment);
+    });
+  }
+
+  async respondToProposal(
+    id: string,
+    userId: string,
+    accept: boolean,
+  ): Promise<Appointment> {
+    return this.dataSource.transaction(async (manager) => {
+      const appointment = await this.loadForReschedule(manager, id);
+
+      if (appointment.client.id !== userId) {
+        throw new ForbiddenException(
+          'Você não pode responder a esta proposta.',
+        );
+      }
+
+      if (!appointment.proposedDate || !appointment.proposedStartTime) {
+        throw new BadRequestException(
+          'Não há proposta de reagendamento pendente.',
+        );
+      }
+
+      const proposed: AppointmentSlot = {
+        date: appointment.proposedDate,
+        startTime: appointment.proposedStartTime,
+        endTime: appointment.proposedEndTime as string,
+      };
+
+      if (!accept) {
+        return this.clearProposal(manager, appointment);
+      }
+
+      this.assertReschedulable(appointment);
+      this.assertLimitNotReached(appointment);
+
+      return this.applyReschedule(
+        manager,
+        appointment,
+        { date: proposed.date, startTime: proposed.startTime },
+        'MANAGER',
+        userId,
+      );
+    });
+  }
+
+  private async applyReschedule(
+    manager: EntityManager,
+    appointment: Appointment,
+    dto: RescheduleAppointmentDto,
+    initiatedBy: RescheduleInitiator,
+    actorId: string,
+  ): Promise<Appointment> {
+    const target = await this.resolveSlot(appointment, dto);
+
+    if (this.isSameSlot(appointment, target)) {
+      throw new BadRequestException('O novo horário é igual ao atual.');
+    }
+
+    await this.assertSlotIsAvailable(manager, appointment, target);
+
+    const previous: AppointmentSlot = {
+      date: appointment.date,
+      startTime: appointment.startTime,
+      endTime: appointment.endTime,
+    };
+
+    await manager.save(AppointmentReschedule, {
+      appointment: { id: appointment.id },
+      fromDate: previous.date,
+      fromStartTime: previous.startTime,
+      fromEndTime: previous.endTime,
+      toDate: target.date,
+      toStartTime: target.startTime,
+      toEndTime: target.endTime,
+      initiatedBy,
+      actor: { id: actorId },
+    });
+
+    appointment.date = target.date;
+    appointment.startTime = target.startTime;
+    appointment.endTime = target.endTime;
+    appointment.rescheduleCount += 1;
+    this.resetProposal(appointment);
+
+    return manager.save(Appointment, appointment);
+  }
+
+  private async assertSlotIsAvailable(
+    manager: EntityManager,
+    appointment: Appointment,
+    target: AppointmentSlot,
+  ): Promise<void> {
+    await this.lockProfessionalDay(
+      manager,
+      appointment.professional.id,
+      target.date,
+    );
+
+    const withinBounds = await this.isWithinAvailableBounds({
+      date: target.date,
+      businessId: appointment.business.id,
+      serviceId: appointment.service.id,
+      professionalId: appointment.professional.id,
+      startTime: target.startTime,
+      durationMinutes:
+        this.timeToMins(target.endTime) - this.timeToMins(target.startTime),
+    });
+
+    if (!withinBounds) {
+      throw new ConflictException(
+        'O profissional não está disponível no horário selecionado.',
+      );
+    }
+
+    await this.assertNoOverlap(manager, appointment, target);
+  }
+
+  private async assertNoOverlap(
+    manager: EntityManager,
+    appointment: Appointment,
+    target: AppointmentSlot,
+  ): Promise<void> {
+    const conflict = await manager
+      .getRepository(Appointment)
+      .createQueryBuilder('a')
+      .where('a.professional = :professionalId', {
+        professionalId: appointment.professional.id,
+      })
+      .andWhere('a.date = :date', { date: target.date })
+      .andWhere('a.id != :id', { id: appointment.id })
+      .andWhere('a.status IN (:...statuses)', { statuses: ACTIVE_STATUSES })
+      .andWhere('a.startTime < :endTime AND a.endTime > :startTime', {
+        startTime: target.startTime,
+        endTime: target.endTime,
+      })
+      .getOne();
+
+    if (conflict) {
+      throw new ConflictException(
+        'Este horário não está mais disponível. Selecione outro horário.',
+      );
+    }
+  }
+
+  private async lockProfessionalDay(
+    manager: EntityManager,
+    professionalId: string,
+    date: string,
+  ): Promise<void> {
+    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+      `appointment:${professionalId}:${date}`,
+    ]);
+  }
+
+  private async resolveSlot(
+    appointment: Appointment,
+    dto: RescheduleAppointmentDto,
+  ): Promise<AppointmentSlot> {
+    const { totalTime } = await this.catalogService.getServiceDuration(
+      appointment.service.id,
+    );
+
+    const startMins = this.timeToMins(dto.startTime);
+    const endMins = startMins + totalTime;
+
+    if (endMins > 24 * 60) {
+      throw new BadRequestException(
+        'O horário selecionado ultrapassa o fim do dia.',
+      );
+    }
+
+    return {
+      date: dto.date,
+      startTime: dto.startTime,
+      endTime: this.minsToTime(endMins),
+    };
+  }
+
+  private isSameSlot(appointment: Appointment, slot: AppointmentSlot): boolean {
+    return (
+      appointment.date === slot.date && appointment.startTime === slot.startTime
+    );
+  }
+
+  private assertLimitNotReached(appointment: Appointment): void {
+    if (appointment.rescheduleCount >= MAX_RESCHEDULES) {
+      throw new UnprocessableEntityException({
+        code: 'RESCHEDULE_LIMIT_REACHED',
+        message: `Limite de ${MAX_RESCHEDULES} reagendamentos atingido para este atendimento.`,
+      });
+    }
+  }
+
+  private assertReschedulable(appointment: Appointment): void {
+    if (!ACTIVE_STATUSES.includes(appointment.status)) {
+      throw new BadRequestException(
+        `Não é possível reagendar um atendimento com status ${appointment.status}.`,
+      );
+    }
+
+    if (this.appointmentStart(appointment).getTime() <= Date.now()) {
+      throw new BadRequestException('Este atendimento já ocorreu.');
+    }
+  }
+
+  private resetProposal(appointment: Appointment): void {
+    appointment.proposedDate = null;
+    appointment.proposedStartTime = null;
+    appointment.proposedEndTime = null;
+    appointment.proposedBy = null;
+    appointment.proposedAt = null;
+  }
+
+  private async clearProposal(
+    manager: EntityManager,
+    appointment: Appointment,
+  ): Promise<Appointment> {
+    this.resetProposal(appointment);
+    return manager.save(Appointment, appointment);
+  }
+
+  private async loadForReschedule(
+    manager: EntityManager,
+    id: string,
+  ): Promise<Appointment> {
+    const appointment = await manager.getRepository(Appointment).findOne({
+      where: { id },
+      relations: RESCHEDULE_RELATIONS,
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado.');
+    }
+
+    return appointment;
+  }
+
+  private async isWithinAvailableBounds(params: {
+    date: string;
+    businessId: string;
+    serviceId: string;
+    professionalId: string;
+    startTime: string;
+    durationMinutes: number;
+  }): Promise<boolean> {
+    const bounds = await this.availabilityService.getAvailableBounds(
+      params.date,
+      params.businessId,
+      params.serviceId,
+      params.professionalId,
+    );
+
+    const startMins = this.timeToMins(params.startTime);
+    const endMins = startMins + params.durationMinutes;
+
+    return bounds.some(
+      (bound) =>
+        startMins >= this.timeToMins(bound.start) &&
+        endMins <= this.timeToMins(bound.end),
+    );
   }
 
   async getBusySlotsByDate(
@@ -128,6 +644,7 @@ export class AppointmentsService {
     date: string,
     statuses: AppointmentStatus[] = ['CONFIRMED'],
     businessId?: string,
+    excludeAppointmentId?: string,
   ): Promise<Appointment[]> {
     const where: FindOptionsWhere<Appointment> = {
       date: date,
@@ -135,24 +652,12 @@ export class AppointmentsService {
     };
     if (professionalId) where.professional = { id: professionalId };
     if (businessId) where.business = { id: businessId };
+    if (excludeAppointmentId) where.id = Not(excludeAppointmentId);
 
     return await this.appointmentRepo.find({
       where,
       select: ['id', 'startTime', 'endTime', 'status'],
     });
-  }
-
-  private timeToMins(time: string): number {
-    const [hours, mins] = time.split(':').map(Number);
-    return hours * 60 + mins;
-  }
-
-  private minsToTime(mins: number): string {
-    const h = Math.floor(mins / 60)
-      .toString()
-      .padStart(2, '0');
-    const m = (mins % 60).toString().padStart(2, '0');
-    return `${h}:${m}`;
   }
 
   async cancelAppointment(id: string): Promise<void> {
@@ -165,18 +670,192 @@ export class AppointmentsService {
       relations: ['client'],
     });
 
-    if (!appointment)
+    if (!appointment) {
       throw new NotFoundException('Agendamento não encontrado.');
-    if (appointment.client.id !== clientId)
+    }
+    if (appointment.client.id !== clientId) {
       throw new ForbiddenException(
         'Você não tem permissão para cancelar este agendamento.',
       );
-    if (appointment.status !== 'PENDING')
+    }
+    if (
+      appointment.status !== 'PENDING' &&
+      appointment.status !== 'CONFIRMED'
+    ) {
       throw new ForbiddenException(
-        'Apenas agendamentos pendentes podem ser cancelados diretamente.',
+        'Apenas agendamentos pendentes ou confirmados podem ser cancelados.',
       );
+    }
 
-    await this.appointmentRepo.update(id, { status: 'CANCELLED' });
+    if (appointment.status === 'CONFIRMED') {
+      const now = Date.now();
+
+      const isWithinGracePeriod =
+        !!appointment.confirmedAt &&
+        now - appointment.confirmedAt.getTime() <= CANCEL_GRACE_PERIOD_MS;
+
+      const isMoreThanMinNoticeBefore =
+        this.appointmentStart(appointment).getTime() - now >=
+        CANCEL_MIN_NOTICE_MS;
+
+      if (!isWithinGracePeriod && !isMoreThanMinNoticeBefore) {
+        throw new ForbiddenException(
+          'O prazo de cancelamento de 2h expirou. Entre em contato com o estabelecimento.',
+        );
+      }
+    }
+
+    await this.appointmentRepo.update(id, {
+      status: 'CANCELLED',
+      cancelledByRole: 'client',
+    });
+  }
+
+  async cancelJustified(
+    id: string,
+    userId: string,
+    reason: string,
+    affectsReputation: boolean,
+  ): Promise<Appointment> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['business', 'client'],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado.');
+    }
+
+    await this.validateManagerAuthority(userId, appointment.business.id);
+
+    appointment.status = 'CANCELLED';
+    appointment.cancellationReason = reason;
+
+    if (affectsReputation) {
+      appointment.cancelledByRole = 'manager';
+      await this.penalizeClient(appointment);
+    } else {
+      appointment.cancelledByRole = 'manager_justified';
+    }
+
+    return await this.appointmentRepo.save(appointment);
+  }
+
+  async markNoShow(id: string, userId: string): Promise<Appointment> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['business', 'client'],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado.');
+    }
+
+    await this.validateManagerAuthority(userId, appointment.business.id);
+
+    if (new Date() <= this.appointmentStart(appointment)) {
+      throw new ForbiddenException(
+        'Não é possível marcar No-Show antes do horário do serviço.',
+      );
+    }
+
+    if (
+      appointment.status !== 'CONFIRMED' &&
+      appointment.status !== 'NO_SHOW'
+    ) {
+      throw new ForbiddenException(
+        'Apenas agendamentos confirmados podem ser marcados como No-Show.',
+      );
+    }
+
+    if (appointment.cancelledByRole === 'manager_noshow') {
+      return appointment;
+    }
+
+    await this.penalizeClient(appointment);
+
+    appointment.status = 'NO_SHOW';
+    appointment.cancelledByRole = 'manager_noshow';
+    return await this.appointmentRepo.save(appointment);
+  }
+
+  async revertNoShow(id: string, userId: string): Promise<Appointment> {
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id },
+      relations: ['business', 'client'],
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado.');
+    }
+
+    await this.validateManagerAuthority(userId, appointment.business.id);
+
+    if (appointment.status !== 'NO_SHOW') {
+      throw new ForbiddenException(
+        'Apenas agendamentos com status NO_SHOW podem ser revertidos.',
+      );
+    }
+
+    const clientProfile = await this.findClientProfile(appointment);
+    if (clientProfile) {
+      if (appointment.cancelledByRole === 'manager_noshow') {
+        clientProfile.noShowCount = Math.max(
+          0,
+          (clientProfile.noShowCount || 0) - 1,
+        );
+      } else {
+        clientProfile.successStreak = (clientProfile.successStreak || 0) + 1;
+        clientProfile.noShowCount = 0;
+      }
+      await this.clientRepo.save(clientProfile);
+    }
+
+    appointment.status = 'COMPLETED';
+    appointment.cancelledByRole = null;
+    return await this.appointmentRepo.save(appointment);
+  }
+
+  async getClientReputation(
+    id: string,
+  ): Promise<{ noShowCount: number; successStreak: number }> {
+    const client = await this.clientRepo.findOne({
+      where: [{ id }, { user: { id } }],
+    });
+
+    if (!client) {
+      throw new NotFoundException('Perfil de cliente não encontrado.');
+    }
+
+    return {
+      noShowCount: client.noShowCount || 0,
+      successStreak: client.successStreak || 0,
+    };
+  }
+
+  private findClientProfile(appointment: Appointment): Promise<Client | null> {
+    if (!appointment.client) return Promise.resolve(null);
+    return this.clientRepo.findOne({
+      where: { user: { id: appointment.client.id } },
+    });
+  }
+
+  private async penalizeClient(appointment: Appointment): Promise<void> {
+    const clientProfile = await this.findClientProfile(appointment);
+    if (!clientProfile) return;
+
+    clientProfile.noShowCount = (clientProfile.noShowCount || 0) + 1;
+    clientProfile.successStreak = 0;
+    await this.clientRepo.save(clientProfile);
+  }
+
+  private async rewardClient(appointment: Appointment): Promise<void> {
+    const clientProfile = await this.findClientProfile(appointment);
+    if (!clientProfile) return;
+
+    clientProfile.successStreak = (clientProfile.successStreak || 0) + 1;
+    clientProfile.noShowCount = 0;
+    await this.clientRepo.save(clientProfile);
   }
 
   async findByClient(clientId: string): Promise<Appointment[]> {
@@ -191,17 +870,19 @@ export class AppointmentsService {
     const manager = await this.managerRepo.findOne({
       where: { user: { id: userId } },
     });
-    if (!manager)
+    if (!manager) {
       throw new ForbiddenException('Perfil de gestor não encontrado.');
+    }
 
     const link = await this.bmRepo.findOne({
       where: { manager: { id: manager.id }, business: { id: businessId } },
     });
 
-    if (!link)
+    if (!link) {
       throw new ForbiddenException(
         'Você não tem permissão para acessar agendamentos desta empresa.',
       );
+    }
   }
 
   async findByBusiness(
@@ -219,7 +900,13 @@ export class AppointmentsService {
 
   async findAll(
     userId: string,
-    params: { date?: string; businessId?: string; professionalId?: string },
+    params: {
+      date?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      businessId?: string;
+      professionalId?: string;
+    },
   ): Promise<Appointment[]> {
     const where: FindOptionsWhere<Appointment> = {};
 
@@ -228,14 +915,24 @@ export class AppointmentsService {
       where.business = { id: params.businessId };
     }
 
-    if (params.date) where.date = params.date;
-    if (params.professionalId)
+    if (params.date) {
+      where.date = params.date;
+    } else if (params.dateFrom && params.dateTo) {
+      where.date = Between(params.dateFrom, params.dateTo);
+    } else if (params.dateFrom) {
+      where.date = MoreThanOrEqual(params.dateFrom);
+    } else if (params.dateTo) {
+      where.date = LessThanOrEqual(params.dateTo);
+    }
+
+    if (params.professionalId) {
       where.professional = { id: params.professionalId };
+    }
 
     return await this.appointmentRepo.find({
       where,
       relations: ['client', 'professional', 'professional.user', 'service'],
-      order: { startTime: 'ASC' },
+      order: { date: 'ASC', startTime: 'ASC' },
     });
   }
 
@@ -246,15 +943,41 @@ export class AppointmentsService {
   ): Promise<Appointment> {
     const appointment = await this.appointmentRepo.findOne({
       where: { id },
-      relations: ['business'],
+      relations: ['business', 'client'],
     });
 
-    if (!appointment)
+    if (!appointment) {
       throw new NotFoundException('Agendamento não encontrado.');
+    }
 
     await this.validateManagerAuthority(userId, appointment.business.id);
 
+    if (status === 'CONFIRMED') {
+      appointment.confirmedAt = new Date();
+    } else if (status === 'COMPLETED' && appointment.status !== 'COMPLETED') {
+      await this.rewardClient(appointment);
+    }
+
     appointment.status = status;
     return await this.appointmentRepo.save(appointment);
+  }
+
+  private appointmentStart(appointment: Appointment): Date {
+    return new Date(
+      `${appointment.date}T${appointment.startTime}:00${BUSINESS_UTC_OFFSET}`,
+    );
+  }
+
+  private timeToMins(time: string): number {
+    const [hours, mins] = time.split(':').map(Number);
+    return hours * 60 + mins;
+  }
+
+  private minsToTime(mins: number): string {
+    const h = Math.floor(mins / 60)
+      .toString()
+      .padStart(2, '0');
+    const m = (mins % 60).toString().padStart(2, '0');
+    return `${h}:${m}`;
   }
 }

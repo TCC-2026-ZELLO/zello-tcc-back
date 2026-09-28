@@ -1,4 +1,10 @@
-import { IsNotEmpty, IsString, IsBoolean, IsOptional } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsBoolean,
+  IsOptional,
+  IsTimeZone,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateBusinessDto {
@@ -15,4 +21,13 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsBoolean()
   visibilityStatus?: boolean;
+
+  @ApiProperty({
+    example: 'America/Sao_Paulo',
+    required: false,
+    description: 'Fuso horário IANA do estabelecimento.',
+  })
+  @IsOptional()
+  @IsTimeZone({ message: 'timezone deve ser um fuso horário IANA válido.' })
+  timezone?: string;
 }

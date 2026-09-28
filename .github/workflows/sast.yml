@@ -1,0 +1,63 @@
+name: 'SAST - Security Scans'
+
+on:
+  push:
+    branches: ['develop', 'main']
+  pull_request:
+    branches: ['develop', 'main']
+  schedule:
+    # Executa toda segunda-feira às 03:00 UTC (00:00 BRT)
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  semgrep:
+    name: Semgrep OSS
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Executar análise do Semgrep
+        # O scan gera um arquivo padronizado no formato SARIF
+        run: semgrep scan --config auto --sarif --output=semgrep.sarif
+        env:
+          SEMGREP_RULES: >-
+            p/default
+            p/owasp-top-ten
+            p/typescript
+            p/javascript
+            p/react
+            p/nodejs
+
+      - name: Publicar resultados do Semgrep no GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() # Garante envio mesmo se vulnerabilidades forem encontradas
+        with:
+          sarif_file: semgrep.sarif
+
+  codeql:
+    name: GitHub CodeQL
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: 'javascript-typescript'
+          queries: security-extended,security-and-quality
+
+      - name: Executar análise do CodeQL
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'

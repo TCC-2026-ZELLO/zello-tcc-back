@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsBoolean, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  MaxLength,
+  IsTimeZone,
+} from 'class-validator';
 
 export class UpdateBusinessProfileDto {
   @IsOptional()
@@ -14,4 +20,8 @@ export class UpdateBusinessProfileDto {
   @IsOptional()
   @IsBoolean()
   visibilityStatus?: boolean;
+
+  @IsOptional()
+  @IsTimeZone({ message: 'timezone deve ser um fuso horário IANA válido.' })
+  timezone?: string;
 }
