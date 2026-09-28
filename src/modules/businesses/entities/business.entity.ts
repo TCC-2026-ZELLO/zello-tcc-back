@@ -61,6 +61,8 @@ export class Business {
   @Column({ name: 'profile_complete', default: false })
   profileComplete: boolean;
 
+  @Column({ name: 'timezone', default: 'America/Sao_Paulo' })
+  timezone: string;
   @Column({ name: 'average_rating', type: 'float', default: 5.0 })
   averageRating: number;
 
