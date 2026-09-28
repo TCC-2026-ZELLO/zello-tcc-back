@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { Business } from './business.entity';
 
-@Entity('portfolio_image')
+@Entity('gallery_image')
 export class GalleryImage {
   @PrimaryGeneratedColumn('uuid')
   id: string;

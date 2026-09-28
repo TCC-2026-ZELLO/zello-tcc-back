@@ -1,18 +1,21 @@
-import { IsUUID, IsDateString, IsString, Matches, IsOptional } from 'class-validator';
+import { IsDateString, IsString, Matches, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAppointmentDto {
   @ApiProperty({ example: 'uuid-da-empresa' })
-  @IsUUID()
+  //@IsUUID
+  @IsString()
   businessId: string;
 
   @ApiProperty({ example: 'uuid-do-profissional', required: false })
   @IsOptional()
-  @IsUUID()
+  //@IsUUID
+  @IsString()
   professionalId?: string;
 
   @ApiProperty({ example: 'uuid-do-servico' })
-  @IsUUID()
+  //@IsUUID
+  @IsString()
   serviceId: string;
 
   @ApiProperty({ example: '2026-04-25' })

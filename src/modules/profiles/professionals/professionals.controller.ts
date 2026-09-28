@@ -80,8 +80,8 @@ export class ProfessionalsController {
     @Req() req: { user: ActiveUser },
     @UploadedFile() file: any,
   ) {
-    const url = this.filesService.uploadPublicFile(file, 'avatars');
-    return this.professionalsService.updateAvatar(req.user.id, await url);
+    const url = await this.filesService.uploadPublicFile(file, 'avatars');
+    return this.professionalsService.updateAvatar(req.user.id, url);
   }
 
   @Post('me/banner')
@@ -92,8 +92,8 @@ export class ProfessionalsController {
     @Req() req: { user: ActiveUser },
     @UploadedFile() file: any,
   ) {
-    const url = this.filesService.uploadPublicFile(file, 'banners');
-    return this.professionalsService.updateBanner(req.user.id, await url);
+    const url = await this.filesService.uploadPublicFile(file, 'banners');
+    return this.professionalsService.updateBanner(req.user.id, url);
   }
 
   @Post('me/portfolio')
@@ -104,11 +104,11 @@ export class ProfessionalsController {
     @Req() req: { user: ActiveUser },
     @UploadedFile() file: any,
   ) {
-    const imageUrl = this.filesService.uploadPublicFile(file, 'portfolios');
-    return this.professionalsService.addPortfolioImage(
-      req.user.id,
-      await imageUrl,
+    const imageUrl = await this.filesService.uploadPublicFile(
+      file,
+      'portfolios',
     );
+    return this.professionalsService.addPortfolioImage(req.user.id, imageUrl);
   }
 
   @Delete('me/portfolio/:id')
@@ -139,14 +139,14 @@ export class ProfessionalsController {
     if (!file) {
       throw new BadRequestException('Arquivo do certificado é obrigatório.');
     }
-    const certificateUrl = this.filesService.uploadPublicFile(
+    const certificateUrl = await this.filesService.uploadPublicFile(
       file,
       'qualifications',
     );
     return this.professionalsService.addQualification(
       req.user.id,
       dto,
-      await certificateUrl,
+      certificateUrl,
     );
   }
 

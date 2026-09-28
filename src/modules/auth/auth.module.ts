@@ -77,6 +77,6 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy],
-  exports: [AuthService],
+  exports: [AuthService, MailerModule],
 })
 export class AuthModule {}

@@ -22,9 +22,12 @@ services:
     build: .
     container_name: nestjs_container
     env_file: .env
+    environment:
+      - DB_HOST=db-tcc
+      - DB_PORT=5432
     restart: always
     ports:
-      - '3000:3000'
+      - '3001:3001'
     depends_on:
       db-tcc:
         condition: service_healthy

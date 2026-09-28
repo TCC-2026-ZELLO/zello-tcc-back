@@ -10,7 +10,9 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -35,15 +37,19 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
+  @UseInterceptors(FileInterceptor('photo'))
   @ApiOperation({
     summary: 'Criar usuário',
-    description: 'Cria um novo usuário no sistema',
+    description: 'Cria um novo usuário no sistema. Aceita multipart/form-data com foto opcional.',
   })
   @ApiResponse({ status: 201, description: 'Usuário criado com sucesso' })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 409, description: 'E-mail já cadastrado' })
-  async create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @UploadedFile() photo?: Express.Multer.File,
+  ) {
+    return this.usersService.create(createUserDto, photo);
   }
 
   @UseGuards(JwtAuthGuard)

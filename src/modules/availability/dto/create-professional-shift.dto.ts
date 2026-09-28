@@ -18,6 +18,7 @@ export class CreateProfessionalShiftDto {
   })
   endTime: string;
 
-  @IsUUID()
+  //@IsUUID()
+  @IsString()
   businessProfessionalId: string;
 }

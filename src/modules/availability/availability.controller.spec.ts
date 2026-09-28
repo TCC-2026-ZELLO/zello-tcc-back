@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AvailabilityController } from './availability.controller';
 import { AvailabilityService } from './availability.service';
 
-describe('AvailabilityController', () => {
+describe('AvailabilityComboController', () => {
   let controller: AvailabilityController;
 
   beforeEach(async () => {

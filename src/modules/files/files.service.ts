@@ -62,13 +62,16 @@ export class FilesService {
         blobHTTPHeaders: { blobContentType: file.mimetype },
       });
 
-      this.logger.log(`✅ Arquivo salvo no Azure: ${fileName}`);
+      this.logger.log(`Arquivo salvo no Azure: ${fileName}`);
 
-      return blockBlobClient.url;
+      const safe_url = new URL(blockBlobClient.url);
+      safe_url.search = '';
+
+      return safe_url.toString();
     } catch (err: any) {
-      this.logger.error(`❌ Erro no Azure Blob Storage: ${err.message}`);
+      this.logger.error(`Erro no Azure Blob Storage: ${err.message}`);
       throw new InternalServerErrorException(
-        `Falha ao gravar arquivo na nuvem. Detalhes do Azure: ${err.message}`,
+        'Falha ao processar o arquivo. Tente novamente mais tarde.',
       );
     }
   }

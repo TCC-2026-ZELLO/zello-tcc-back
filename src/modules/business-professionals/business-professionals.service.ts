@@ -13,6 +13,8 @@ import { BusinessManager } from '../business-managers/entities/business-manager.
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { BusinessProfessionalService } from './entities/business-professional-service.entity';
 import { Professional } from '../profiles/professionals/entities/professional.entity';
+import { ProfessionalShift } from '../availability/entities/professional-shift.entity';
+import { BusinessOperatingHour } from '../availability/entities/business_operating_hour.entity';
 
 @Injectable()
 export class BusinessProfessionalsService {
@@ -31,6 +33,9 @@ export class BusinessProfessionalsService {
 
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
+
+    @InjectRepository(ProfessionalShift)
+    private readonly shiftRepo: Repository<ProfessionalShift>,
   ) {}
 
   async create(dto: CreateBusinessProfessionalDto, userId: string) {
@@ -141,5 +146,57 @@ export class BusinessProfessionalsService {
     );
 
     return await this.bpsRepo.save(newLinks);
+  }
+
+  async findProfessionalShifts(bpId: string) {
+    await this.findOne(bpId);
+    return await this.shiftRepo.find({
+      where: { businessProfessional: { id: bpId } },
+      order: { dayOfWeek: 'ASC' },
+    });
+  }
+
+  async updateProfessionalShifts(
+    bpId: string,
+    shifts: { dayOfWeek: number; startTime: string; endTime: string }[],
+  ) {
+    const bp = await this.bpRepo.findOne({
+      where: { id: bpId },
+      relations: ['business'],
+    });
+
+    if (!bp) throw new Error('Vínculo não encontrado.');
+    const businessId = bp.business.id;
+
+    return await this.bpRepo.manager.transaction(async (em) => {
+      // Pega os horários da loja
+      const businessHours = await em.find<BusinessOperatingHour>(
+        BusinessOperatingHour,
+        {
+          where: { business: { id: businessId } },
+        },
+      );
+
+      await em.delete(ProfessionalShift, {
+        businessProfessional: { id: bpId },
+      });
+
+      const newShifts: ProfessionalShift[] = [];
+      for (const s of shifts) {
+        const bh = businessHours.find((h) => h.dayOfWeek === s.dayOfWeek);
+        if (!bh || !bh.isOpen) continue; // Loja fechada no dia, ignora o turno
+
+        newShifts.push(
+          em.create(ProfessionalShift, {
+            dayOfWeek: s.dayOfWeek,
+            startTime: bh.startTime,
+            endTime: bh.endTime,
+            businessProfessional: { id: bpId },
+          }),
+        );
+      }
+
+      return await em.save(ProfessionalShift, newShifts);
+    });
   }
 }

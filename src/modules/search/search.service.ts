@@ -110,6 +110,8 @@ export class SearchService {
       name: emp.tradeName,
       specialty: 'Estabelecimento',
       rating: 4.8,
+      photoUrl: emp.photoUrl,
+      bannerUrl: emp.bannerUrl,
     }));
   }
 }

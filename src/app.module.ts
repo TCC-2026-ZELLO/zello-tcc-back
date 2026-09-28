@@ -22,6 +22,11 @@ import { BusinessProfessionalsModule } from './modules/business-professionals/bu
 import { BusinessManagersModule } from './modules/business-managers/business-managers.module';
 import { FilesModule } from './modules/files/files.module';
 import { FilesService } from './modules/files/files.service';
+import { AddressesModule } from './modules/addresses/addresses.module';
+import { LookupController } from './common/controllers/lookup.controller';
+import { ViaCepService } from './common/services/viacep.service';
+import { CnpjLookupService } from './common/services/cnpj-lookup.service';
+import { CombosModule } from './modules/combos/combos.module';
 
 @Module({
   imports: [
@@ -71,8 +76,10 @@ import { FilesService } from './modules/files/files.service';
     BusinessProfessionalsModule,
     BusinessManagersModule,
     FilesModule,
+    AddressesModule,
+    CombosModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, LookupController],
   providers: [
     AppService,
     {
@@ -80,6 +87,8 @@ import { FilesService } from './modules/files/files.service';
       useClass: ThrottlerGuard,
     },
     FilesService,
+    ViaCepService,
+    CnpjLookupService,
   ],
 })
 export class AppModule {}
