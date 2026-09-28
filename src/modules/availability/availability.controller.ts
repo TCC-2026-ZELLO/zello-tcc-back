@@ -23,6 +23,10 @@ import { ActiveUser } from '../auth/interfaces/active-user.interface';
 export class AvailabilityController {
   constructor(private readonly availabilityService: AvailabilityService) {}
 
+  @Get('operating-hours')
+  getOperatingHours(@Query('businessId') businessId: string) {
+    return this.availabilityService.getOperatingHours(businessId);
+  }
   @Post('operating-hours')
   @Roles('manager', 'admin')
   createOperatingHour(

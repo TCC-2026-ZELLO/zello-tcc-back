@@ -70,9 +70,12 @@ export class UsersService {
 
     let photoUrl: string | null = null;
     if (photo) {
-      const folder = createUserDto.accountType === 'ESTABELECIMENTO' ? 'business-photos' 
-        : createUserDto.accountType === 'PROFISSIONAL' ? 'avatars' 
-        : 'client-photos';
+      const folder =
+        createUserDto.accountType === 'ESTABELECIMENTO'
+          ? 'business-photos'
+          : createUserDto.accountType === 'PROFISSIONAL'
+            ? 'avatars'
+            : 'client-photos';
       photoUrl = await this.filesService.uploadPublicFile(photo as any, folder);
     }
 
@@ -113,15 +116,17 @@ export class UsersService {
               tradeName: createUserDto.tradeName,
               phone: createUserDto.businessPhone,
               photoUrl,
-              address: createUserDto.zipCode ? {
-                zipCode: createUserDto.zipCode!,
-                street: createUserDto.street!,
-                number: createUserDto.addressNumber!,
-                complement: createUserDto.complement,
-                neighborhood: createUserDto.neighborhood!,
-                city: createUserDto.city!,
-                state: createUserDto.state!,
-              } : undefined,
+              address: createUserDto.zipCode
+                ? {
+                    zipCode: createUserDto.zipCode!,
+                    street: createUserDto.street!,
+                    number: createUserDto.addressNumber!,
+                    complement: createUserDto.complement,
+                    neighborhood: createUserDto.neighborhood!,
+                    city: createUserDto.city!,
+                    state: createUserDto.state!,
+                  }
+                : undefined,
             });
           else if (roleName === 'client')
             await this.appendClient(userExistente.id, em, photoUrl);
@@ -143,6 +148,8 @@ export class UsersService {
           passwordHash: hash,
           phone: createUserDto.phone,
           cpf: createUserDto.cpf || undefined,
+          wantsEmailReminders: createUserDto.wantsEmailReminders ?? true,
+          wantsWhatsappReminders: createUserDto.wantsWhatsappReminders ?? true,
         });
 
         const userSalvo = await em.save(User, novoUser);
@@ -169,23 +176,24 @@ export class UsersService {
             });
             await em.save(Address, address);
           }
-        }
-        else if (roleName === 'manager')
+        } else if (roleName === 'manager')
           await this.appendManager(userSalvo.id, em, {
             legalName: createUserDto.legalName,
             cnpj: createUserDto.cnpj,
             tradeName: createUserDto.tradeName,
             phone: createUserDto.businessPhone,
             photoUrl,
-            address: createUserDto.zipCode ? {
-              zipCode: createUserDto.zipCode!,
-              street: createUserDto.street!,
-              number: createUserDto.addressNumber!,
-              complement: createUserDto.complement,
-              neighborhood: createUserDto.neighborhood!,
-              city: createUserDto.city!,
-              state: createUserDto.state!,
-            } : undefined,
+            address: createUserDto.zipCode
+              ? {
+                  zipCode: createUserDto.zipCode!,
+                  street: createUserDto.street!,
+                  number: createUserDto.addressNumber!,
+                  complement: createUserDto.complement,
+                  neighborhood: createUserDto.neighborhood!,
+                  city: createUserDto.city!,
+                  state: createUserDto.state!,
+                }
+              : undefined,
           });
 
         const savedUser = await this.findOne(userSalvo.id, em);
@@ -330,6 +338,12 @@ export class UsersService {
       }
       user.email = updateUserDto.email;
     }
+    if (updateUserDto.wantsEmailReminders !== undefined) {
+      user.wantsEmailReminders = updateUserDto.wantsEmailReminders;
+    }
+    if (updateUserDto.wantsWhatsappReminders !== undefined) {
+      user.wantsWhatsappReminders = updateUserDto.wantsWhatsappReminders;
+    }
 
     const userAtualizado = await this.usersRepository.save(user);
 
@@ -392,7 +406,11 @@ export class UsersService {
 
   // =========================================================================
 
-  async appendClient(userId: string, transactionManager?: EntityManager, photoUrl?: string | null) {
+  async appendClient(
+    userId: string,
+    transactionManager?: EntityManager,
+    photoUrl?: string | null,
+  ) {
     const em = transactionManager || this.usersRepository.manager;
 
     const user = await em.findOne(User, {
@@ -408,7 +426,15 @@ export class UsersService {
     return await em.save(Client, client);
   }
 
-  async appendProfessional(userId: string, transactionManager?: EntityManager, profileData?: { specialty?: string; biography?: string; photoUrl?: string | null }) {
+  async appendProfessional(
+    userId: string,
+    transactionManager?: EntityManager,
+    profileData?: {
+      specialty?: string;
+      biography?: string;
+      photoUrl?: string | null;
+    },
+  ) {
     const em = transactionManager || this.usersRepository.manager;
 
     const user = await em.findOne(User, {
@@ -420,7 +446,7 @@ export class UsersService {
 
     await this.ensureRole(user, 'professional', em);
 
-    const professional = em.create(Professional, { 
+    const professional = em.create(Professional, {
       user,
       specialty: profileData?.specialty || undefined,
       biography: profileData?.biography || undefined,
@@ -430,7 +456,26 @@ export class UsersService {
     return await em.save(Professional, professional);
   }
 
-  async appendManager(userId: string, transactionManager?: EntityManager, businessData?: { legalName?: string; cnpj?: string; tradeName?: string; phone?: string; photoUrl?: string | null; address?: { zipCode: string; street: string; number: string; complement?: string; neighborhood: string; city: string; state: string } }) {
+  async appendManager(
+    userId: string,
+    transactionManager?: EntityManager,
+    businessData?: {
+      legalName?: string;
+      cnpj?: string;
+      tradeName?: string;
+      phone?: string;
+      photoUrl?: string | null;
+      address?: {
+        zipCode: string;
+        street: string;
+        number: string;
+        complement?: string;
+        neighborhood: string;
+        city: string;
+        state: string;
+      };
+    },
+  ) {
     const em = transactionManager || this.usersRepository.manager;
 
     const user = await em.findOne(User, {

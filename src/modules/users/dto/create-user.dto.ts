@@ -71,26 +71,57 @@ export class CreateUserDto {
   })
   accountType!: string;
 
-  @ApiProperty({ description: 'Telefone celular (apenas dígitos)', example: '11999998888' })
+  @ApiProperty({
+    description: 'Telefone celular (apenas dígitos)',
+    example: '11999998888',
+  })
   @IsString({ message: 'O telefone deve ser um texto válido.' })
   @IsNotEmpty({ message: 'O telefone é obrigatório.' })
   @Matches(/^\d{10,11}$/, { message: 'O telefone deve ter 10 ou 11 dígitos.' })
   phone!: string;
 
-  @ApiProperty({ description: 'CPF (apenas dígitos)', example: '12345678901', required: false })
+  @ApiProperty({
+    description: 'CPF (apenas dígitos)',
+    example: '12345678901',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType !== 'ESTABELECIMENTO')
   @IsNotEmpty({ message: 'O CPF é obrigatório.' })
   @IsCpf()
   cpf?: string;
 
+  @ApiProperty({
+    description: 'Deseja receber lembretes por E-mail?',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  wantsEmailReminders?: boolean;
+
+  @ApiProperty({
+    description: 'Deseja receber lembretes por WhatsApp?',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  wantsWhatsappReminders?: boolean;
+
   // === Professional-specific fields ===
-  @ApiProperty({ description: 'Especialidade do profissional', example: 'Cabeleireiro', required: false })
+  @ApiProperty({
+    description: 'Especialidade do profissional',
+    example: 'Cabeleireiro',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'PROFISSIONAL')
   @IsString()
   @IsNotEmpty({ message: 'A especialidade é obrigatória.' })
   specialty?: string;
 
-  @ApiProperty({ description: 'Biografia curta', example: 'Profissional com 5 anos de experiência.', required: false })
+  @ApiProperty({
+    description: 'Biografia curta',
+    example: 'Profissional com 5 anos de experiência.',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'PROFISSIONAL')
   @IsOptional()
   @IsString()
@@ -98,19 +129,31 @@ export class CreateUserDto {
   biography?: string;
 
   // === Establishment-specific fields ===
-  @ApiProperty({ description: 'CNPJ (apenas dígitos)', example: '11222333000181', required: false })
+  @ApiProperty({
+    description: 'CNPJ (apenas dígitos)',
+    example: '11222333000181',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsNotEmpty({ message: 'O CNPJ é obrigatório.' })
   @IsCnpj()
   cnpj?: string;
 
-  @ApiProperty({ description: 'Razão Social', example: 'Salão Beleza LTDA', required: false })
+  @ApiProperty({
+    description: 'Razão Social',
+    example: 'Salão Beleza LTDA',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'A razão social é obrigatória.' })
   legalName?: string;
 
-  @ApiProperty({ description: 'Nome Fantasia', example: 'Salão Beleza', required: false })
+  @ApiProperty({
+    description: 'Nome Fantasia',
+    example: 'Salão Beleza',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsOptional()
   @IsString()
@@ -123,7 +166,11 @@ export class CreateUserDto {
   businessPhone?: string;
 
   // === Establishment address fields ===
-  @ApiProperty({ description: 'CEP (apenas dígitos)', example: '01001000', required: false })
+  @ApiProperty({
+    description: 'CEP (apenas dígitos)',
+    example: '01001000',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsNotEmpty({ message: 'O CEP é obrigatório.' })
   @Length(8, 8, { message: 'O CEP deve ter exatamente 8 dígitos.' })
