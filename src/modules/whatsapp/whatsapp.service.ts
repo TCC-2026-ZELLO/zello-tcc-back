@@ -35,7 +35,9 @@ export class WhatsappService implements OnModuleInit {
       this.logger.error('Falha na autenticação do WhatsApp', msg);
     });
 
-    this.client.initialize();
+    this.client.initialize().catch((err) => {
+      this.logger.warn(`Falha ao inicializar o WhatsApp: ${err.message}`);
+    });
   }
 
   async sendMessage(to: string, message: string): Promise<boolean> {
