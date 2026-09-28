@@ -53,4 +53,17 @@ export class Review {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @Column({ name: 'response_text', type: 'text', nullable: true })
+  responseText: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'response_author_id' })
+  responseAuthor: User | null;
+
+  @Column({ name: 'responded_at', type: 'timestamptz', nullable: true })
+  respondedAt: Date | null;
+
+  @Column({ name: 'response_updated_at', type: 'timestamptz', nullable: true })
+  responseUpdatedAt: Date | null;
 }
