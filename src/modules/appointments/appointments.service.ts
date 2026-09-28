@@ -12,15 +12,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository,
   In,
-  FindOptionsWhere,
-  EntityManager,
-  DataSource,
-} from 'typeorm';
-import { Appointment, AppointmentStatus } from './entities/appointment.entity';
   Not,
   FindOptionsWhere,
-  DataSource,
   EntityManager,
+  DataSource,
   Between,
   MoreThanOrEqual,
   LessThanOrEqual,
@@ -116,7 +111,7 @@ export class AppointmentsService {
         dto.date,
       );
 
-      await this.assertNoOverlap(
+      await this.assertNoOverlapOnCreation(
         manager,
         targetProfessionalId,
         dto.date,
@@ -202,40 +197,6 @@ export class AppointmentsService {
       const boundStart = this.timeToMins(bound.start);
       const boundEnd = this.timeToMins(bound.end);
       return startMins >= boundStart && endMins <= boundEnd;
-      const profIds = [
-        ...new Set(shifts.map((s) => s.businessProfessional.professional.id)),
-      ];
-
-      for (const pId of profIds) {
-        const isFree = await this.isWithinAvailableBounds({
-          date: dto.date,
-          businessId: dto.businessId,
-          serviceId: dto.serviceId,
-          professionalId: pId,
-          startTime: dto.startTime,
-          durationMinutes: totalTime,
-        });
-
-        if (isFree) {
-          targetProfessionalId = pId;
-          break;
-        }
-      }
-
-      if (!targetProfessionalId) {
-        throw new ConflictException(
-          'Nenhum profissional está disponível neste horário.',
-        );
-      }
-    }
-
-    const isValid = await this.isWithinAvailableBounds({
-      date: dto.date,
-      businessId: dto.businessId,
-      serviceId: dto.serviceId,
-      professionalId: targetProfessionalId,
-      startTime: dto.startTime,
-      durationMinutes: totalTime,
     });
   }
 
@@ -283,7 +244,7 @@ export class AppointmentsService {
    * cobre o caso de outra reserva ter sido confirmada entre a validação
    * inicial e a obtenção do lock (AC2).
    */
-  private async assertNoOverlap(
+  private async assertNoOverlapOnCreation(
     manager: EntityManager,
     professionalId: string,
     date: string,
@@ -310,18 +271,6 @@ export class AppointmentsService {
         'O horário selecionado não está mais disponível.',
       );
     }
-    const appointment = this.appointmentRepo.create({
-      date: dto.date,
-      startTime: dto.startTime,
-      endTime: this.minsToTime(this.timeToMins(dto.startTime) + totalTime),
-      client: { id: clientId },
-      professional: { id: targetProfessionalId },
-      business: { id: dto.businessId },
-      service: { id: dto.serviceId },
-      status: 'PENDING',
-    });
-
-    return await this.appointmentRepo.save(appointment);
   }
 
   async rescheduleByClient(
