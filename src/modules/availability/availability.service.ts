@@ -24,6 +24,7 @@ import { ActiveUser } from '../auth/interfaces/active-user.interface';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { Professional } from '../profiles/professionals/entities/professional.entity';
+import { BusinessProfessional } from '../business-professionals/entities/business-professional.entity';
 
 @Injectable()
 export class AvailabilityService {
@@ -45,6 +46,13 @@ export class AvailabilityService {
     private readonly appointmentsService: AppointmentsService,
   ) {}
 
+  async getOperatingHours(businessId: string) {
+    return await this.operatingHourRepo.find({
+      where: { business: { id: businessId } },
+      order: { dayOfWeek: 'ASC' },
+    });
+  }
+
   async createOperatingHour(
     dto: CreateBusinessOperatingHourDto,
     requester: ActiveUser,
@@ -64,16 +72,85 @@ export class AvailabilityService {
       });
     }
 
-    return await this.operatingHourRepo.save(hour);
+    const savedHour = await this.operatingHourRepo.save(hour);
+
+    // Ajustar os turnos dos profissionais
+    const shifts = await this.shiftRepo
+      .createQueryBuilder('shift')
+      .leftJoinAndSelect('shift.businessProfessional', 'bp')
+      .leftJoinAndSelect('bp.business', 'business')
+      .where('shift.dayOfWeek = :dayOfWeek', { dayOfWeek: dto.dayOfWeek })
+      .andWhere('business.id = :businessId', { businessId: dto.businessId })
+      .getMany();
+
+    if (!savedHour.isOpen) {
+      if (shifts.length > 0) {
+        await this.shiftRepo.remove(shifts);
+      }
+    } else {
+      const shiftsToUpdate: ProfessionalShift[] = [];
+
+      for (const shift of shifts) {
+        shift.startTime = savedHour.startTime;
+        shift.endTime = savedHour.endTime;
+        shiftsToUpdate.push(shift);
+      }
+
+      if (shiftsToUpdate.length > 0) await this.shiftRepo.save(shiftsToUpdate);
+    }
+
+    return savedHour;
   }
 
   async createShift(dto: CreateProfessionalShiftDto) {
-    const { businessProfessionalId, ...rest } = dto;
+    const { businessProfessionalId } = dto;
+
+    const bp = await this.shiftRepo.manager.findOne(BusinessProfessional, {
+      where: { id: businessProfessionalId },
+      relations: ['business'],
+    });
+
+    if (!bp) {
+      throw new BadRequestException('Vínculo de profissional não encontrado.');
+    }
+
+    const businessHour = await this.operatingHourRepo.findOne({
+      where: { business: { id: bp.business.id }, dayOfWeek: dto.dayOfWeek },
+    });
+
+    if (!businessHour || !businessHour.isOpen) {
+      throw new BadRequestException('A empresa não tem expediente neste dia.');
+    }
+
+    const bizStart = this.timeToMins(businessHour.startTime);
+    const bizEnd = this.timeToMins(businessHour.endTime);
+    const shiftStart = this.timeToMins(dto.startTime);
+    const shiftEnd = this.timeToMins(dto.endTime);
+
+    const finalStart = Math.max(bizStart, shiftStart);
+    const finalEnd = Math.min(bizEnd, shiftEnd);
+
+    if (finalStart >= finalEnd) {
+      throw new BadRequestException(
+        'O turno informado está fora do horário de funcionamento da empresa.',
+      );
+    }
+
+    const formatTime = (mins: number) => {
+      const h = Math.floor(mins / 60)
+        .toString()
+        .padStart(2, '0');
+      const m = (mins % 60).toString().padStart(2, '0');
+      return `${h}:${m}:00`;
+    };
 
     const shift = this.shiftRepo.create({
-      ...rest,
+      dayOfWeek: dto.dayOfWeek,
+      startTime: formatTime(finalStart),
+      endTime: formatTime(finalEnd),
       businessProfessional: { id: businessProfessionalId },
     });
+
     return await this.shiftRepo.save(shift);
   }
 
@@ -492,5 +569,3 @@ export class AvailabilityService {
     });
   }
 }
-
-

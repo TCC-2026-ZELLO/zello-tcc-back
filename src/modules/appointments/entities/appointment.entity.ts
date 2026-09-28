@@ -88,6 +88,18 @@ export class Appointment {
   @Column({ type: 'timestamptz', nullable: true })
   confirmedAt: Date | null;
 
+  @Column({ type: 'varchar', default: 'PENDING' })
+  reminder24hStatus: 'PENDING' | 'SENT' | 'FAILED';
+
+  @Column({ type: 'varchar', default: 'PENDING' })
+  reminder1hStatus: 'PENDING' | 'SENT' | 'FAILED';
+
+  @Column({ type: 'int', default: 0 })
+  reminderRetryCount: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastReminderAttempt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

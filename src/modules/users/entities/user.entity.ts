@@ -68,6 +68,12 @@ export class User {
   @Column({ name: 'phone_verified_at', type: 'timestamptz', nullable: true })
   phoneVerifiedAt: Date;
 
+  @Column({ name: 'wants_email_reminders', type: 'boolean', default: true })
+  wantsEmailReminders: boolean;
+
+  @Column({ name: 'wants_whatsapp_reminders', type: 'boolean', default: true })
+  wantsWhatsappReminders: boolean;
+
   @ManyToMany(() => Role, (role) => role.users)
   @JoinTable({
     name: 'user_role',
