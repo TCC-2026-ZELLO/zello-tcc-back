@@ -6,33 +6,49 @@ import {
   IsUUID,
   Min,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class CreateServiceDto {
-  @ApiProperty({ example: 'Corte de Cabelo' })
+  @ApiProperty({
+    description: 'Nome comercial do serviço oferecido',
+    example: 'Corte Masculino + Barba Terapia',
+  })
   @IsString()
   name: string;
 
-  @ApiProperty({ required: false })
+  @ApiPropertyOptional({
+    description: 'Descrição detalhada dos procedimentos inclusos no serviço',
+    example:
+      'Corte personalizado na tesoura e máquina, seguido de ritual de barba com toalha quente, óleo essencial e massagem facial.',
+  })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: 45, description: 'Duração em minutos' })
+  @ApiProperty({
+    example: 60,
+    description: 'Duração estimada de execução do serviço em minutos',
+    minimum: 1,
+  })
   @IsInt()
   @Min(1)
   durationMinutes: number;
 
   @ApiProperty({
     example: 15,
-    description: 'Tempo de limpeza pós-serviço (AC2)',
+    description:
+      'Tempo de higienização/preparação pós-serviço em minutos (AC2)',
+    minimum: 0,
   })
   @IsInt()
   @Min(0)
   cleanupMinutes: number;
 
-  @ApiProperty({ example: 50.0 })
+  @ApiProperty({
+    description: 'Valor cobrado pelo serviço em Reais (BRL)',
+    example: 95.0,
+  })
   @Type(() => Number)
   @IsNumber()
   price: number;

@@ -17,7 +17,7 @@ describe('ResetPasswordDto', () => {
     const matchesError = errors.find((e) => e.property === 'newPassword')
       ?.constraints?.matches;
     expect(matchesError).toContain(
-      'A senha deve conter letras maiúsculas, minúsculas, números ou caracteres especiais.',
+      'A senha deve conter letras maiúsculas, minúsculas, números e caracteres especiais.',
     );
   });
 

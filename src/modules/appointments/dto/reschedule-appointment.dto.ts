@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, Matches } from 'class-validator';
+import { IsBoolean, IsDateString, Matches } from 'class-validator';
 
 export class RescheduleAppointmentDto {
-  @ApiProperty({ example: '2026-09-10', description: 'Nova data (YYYY-MM-DD)' })
+  @ApiProperty({
+    example: '2026-11-20',
+    description: 'Nova data proposta para o atendimento (YYYY-MM-DD)',
+  })
   @IsDateString(
     { strict: false },
     { message: 'date deve estar no formato YYYY-MM-DD' },
@@ -10,8 +13,8 @@ export class RescheduleAppointmentDto {
   date: string;
 
   @ApiProperty({
-    example: '14:30',
-    description: 'Novo horário de início (HH:mm)',
+    example: '16:00',
+    description: 'Novo horário de início proposto para o atendimento (HH:mm)',
   })
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
     message: 'startTime deve estar no formato HH:mm',
@@ -19,12 +22,11 @@ export class RescheduleAppointmentDto {
   startTime: string;
 }
 
-import { IsBoolean } from 'class-validator';
-
 export class RespondRescheduleDto {
   @ApiProperty({
     example: true,
-    description: 'true aceita a proposta do gestor, false a recusa',
+    description:
+      'Define a resposta do cliente: true aceita a proposta de novo horário do gestor, false a recusa',
   })
   @IsBoolean()
   accept: boolean;

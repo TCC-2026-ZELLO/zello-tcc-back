@@ -1,14 +1,23 @@
 import { IsOptional, IsInt, Min } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateClientDto {
-  @ApiProperty({ example: 1, required: false })
+  @ApiPropertyOptional({
+    description: 'Contador acumulado de faltas injustificadas (No-Show)',
+    example: 1,
+    minimum: 0,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
   noShowCount?: number;
 
-  @ApiProperty({ example: 3, required: false })
+  @ApiPropertyOptional({
+    description:
+      'Sequência de comparecimentos consecutivos bem-sucedidos pelo cliente',
+    example: 3,
+    minimum: 0,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
