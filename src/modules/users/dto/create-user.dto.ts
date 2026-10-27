@@ -20,7 +20,7 @@ import { IsCnpj } from '../../../common/validators/is-cnpj.validator';
 export class CreateUserDto {
   @ApiProperty({
     description: 'Nome completo do usuário',
-    example: 'João da Silva',
+    example: 'Mariana Costa Silva',
   })
   @IsString({ message: 'O nome deve ser um texto válido.' })
   @IsNotEmpty({ message: 'O nome é obrigatório.' })
@@ -28,16 +28,17 @@ export class CreateUserDto {
 
   @ApiProperty({
     description: 'E-mail único do usuário',
-    example: 'joao@email.com',
+    example: 'mariana.costa@zello.com.br',
   })
   @IsEmail({}, { message: 'O e-mail informado é inválido.' })
   @IsNotEmpty({ message: 'O e-mail é obrigatório.' })
   email!: string;
 
   @ApiProperty({
-    description: 'Senha com no mínimo 6 caracteres',
-    example: 'senha123',
-    minLength: 6,
+    description:
+      'Senha com no mínimo 8 caracteres (letras maiúsculas, minúsculas, números e caracteres especiais)',
+    example: 'Zello@2026!',
+    minLength: 8,
   })
   @IsNotEmpty({ message: 'A senha é obrigatória.' })
   @IsString()
@@ -72,8 +73,8 @@ export class CreateUserDto {
   accountType!: string;
 
   @ApiProperty({
-    description: 'Telefone celular (apenas dígitos)',
-    example: '11999998888',
+    description: 'Telefone celular com DDD (apenas dígitos)',
+    example: '41998765432',
   })
   @IsString({ message: 'O telefone deve ser um texto válido.' })
   @IsNotEmpty({ message: 'O telefone é obrigatório.' })
@@ -81,8 +82,9 @@ export class CreateUserDto {
   phone!: string;
 
   @ApiProperty({
-    description: 'CPF (apenas dígitos)',
-    example: '12345678901',
+    description:
+      'CPF válido com 11 dígitos (obrigatório para CLIENTE e PROFISSIONAL)',
+    example: '39053344705',
     required: false,
   })
   @ValidateIf((o) => o.accountType !== 'ESTABELECIMENTO')
@@ -91,7 +93,8 @@ export class CreateUserDto {
   cpf?: string;
 
   @ApiProperty({
-    description: 'Deseja receber lembretes por E-mail?',
+    description: 'Deseja receber lembretes de agendamento por E-mail?',
+    example: true,
     required: false,
   })
   @IsOptional()
@@ -99,7 +102,8 @@ export class CreateUserDto {
   wantsEmailReminders?: boolean;
 
   @ApiProperty({
-    description: 'Deseja receber lembretes por WhatsApp?',
+    description: 'Deseja receber lembretes de agendamento por WhatsApp?',
+    example: true,
     required: false,
   })
   @IsOptional()
@@ -108,8 +112,8 @@ export class CreateUserDto {
 
   // === Professional-specific fields ===
   @ApiProperty({
-    description: 'Especialidade do profissional',
-    example: 'Cabeleireiro',
+    description: 'Especialidade principal do profissional',
+    example: 'Colorista e Visagista',
     required: false,
   })
   @ValidateIf((o) => o.accountType === 'PROFISSIONAL')
@@ -118,8 +122,9 @@ export class CreateUserDto {
   specialty?: string;
 
   @ApiProperty({
-    description: 'Biografia curta',
-    example: 'Profissional com 5 anos de experiência.',
+    description: 'Biografia curta do profissional (máx. 280 caracteres)',
+    example:
+      'Especialista em mechas criativas, cortes terapêuticos e visagismo com 8 anos de atuação em Curitiba.',
     required: false,
   })
   @ValidateIf((o) => o.accountType === 'PROFISSIONAL')
@@ -130,7 +135,7 @@ export class CreateUserDto {
 
   // === Establishment-specific fields ===
   @ApiProperty({
-    description: 'CNPJ (apenas dígitos)',
+    description: 'CNPJ válido com 14 dígitos (obrigatório para ESTABELECIMENTO)',
     example: '11222333000181',
     required: false,
   })
@@ -140,8 +145,8 @@ export class CreateUserDto {
   cnpj?: string;
 
   @ApiProperty({
-    description: 'Razão Social',
-    example: 'Salão Beleza LTDA',
+    description: 'Razão Social da empresa',
+    example: 'Studio Belle Epoque Estetica e Beleza LTDA',
     required: false,
   })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
@@ -150,8 +155,8 @@ export class CreateUserDto {
   legalName?: string;
 
   @ApiProperty({
-    description: 'Nome Fantasia',
-    example: 'Salão Beleza',
+    description: 'Nome Fantasia do estabelecimento',
+    example: 'Studio Belle Époque',
     required: false,
   })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
@@ -159,7 +164,11 @@ export class CreateUserDto {
   @IsString()
   tradeName?: string;
 
-  @ApiProperty({ description: 'Telefone comercial', required: false })
+  @ApiProperty({
+    description: 'Telefone comercial do estabelecimento',
+    example: '4133224455',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsOptional()
   @IsString()
@@ -167,8 +176,8 @@ export class CreateUserDto {
 
   // === Establishment address fields ===
   @ApiProperty({
-    description: 'CEP (apenas dígitos)',
-    example: '01001000',
+    description: 'CEP do estabelecimento (apenas 8 dígitos)',
+    example: '80020310',
     required: false,
   })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
@@ -176,74 +185,126 @@ export class CreateUserDto {
   @Length(8, 8, { message: 'O CEP deve ter exatamente 8 dígitos.' })
   zipCode?: string;
 
-  @ApiProperty({ description: 'Logradouro', required: false })
+  @ApiProperty({
+    description: 'Logradouro do estabelecimento',
+    example: 'Rua XV de Novembro',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'O logradouro é obrigatório.' })
   street?: string;
 
-  @ApiProperty({ description: 'Número', required: false })
+  @ApiProperty({
+    description: 'Número do endereço do estabelecimento',
+    example: '1299',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'O número é obrigatório.' })
   addressNumber?: string;
 
-  @ApiProperty({ description: 'Complemento', required: false })
+  @ApiProperty({
+    description: 'Complemento do endereço do estabelecimento',
+    example: 'Conjunto 402 - Edifício Centro Comercial',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   complement?: string;
 
-  @ApiProperty({ description: 'Bairro', required: false })
+  @ApiProperty({
+    description: 'Bairro do estabelecimento',
+    example: 'Centro',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'O bairro é obrigatório.' })
   neighborhood?: string;
 
-  @ApiProperty({ description: 'Cidade', required: false })
+  @ApiProperty({
+    description: 'Cidade do estabelecimento',
+    example: 'Curitiba',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'A cidade é obrigatória.' })
   city?: string;
 
-  @ApiProperty({ description: 'UF (2 caracteres)', required: false })
+  @ApiProperty({
+    description: 'UF do estabelecimento (2 caracteres)',
+    example: 'PR',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @Length(2, 2, { message: 'O estado deve ter 2 caracteres.' })
   state?: string;
 
   // === Client optional address fields ===
-  @ApiProperty({ description: 'CEP do cliente', required: false })
+  @ApiProperty({
+    description: 'CEP residencial do cliente (8 dígitos)',
+    example: '80420090',
+    required: false,
+  })
   @ValidateIf((o) => o.accountType === 'CLIENTE' && o.clientZipCode)
   @IsOptional()
   @Length(8, 8, { message: 'O CEP deve ter exatamente 8 dígitos.' })
   clientZipCode?: string;
 
-  @ApiProperty({ description: 'Logradouro do cliente', required: false })
+  @ApiProperty({
+    description: 'Logradouro residencial do cliente',
+    example: 'Avenida do Batel',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   clientStreet?: string;
 
-  @ApiProperty({ description: 'Número do cliente', required: false })
+  @ApiProperty({
+    description: 'Número residencial do cliente',
+    example: '1550',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   clientNumber?: string;
 
-  @ApiProperty({ description: 'Complemento do cliente', required: false })
+  @ApiProperty({
+    description: 'Complemento residencial do cliente',
+    example: 'Apto 804',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   clientComplement?: string;
 
-  @ApiProperty({ description: 'Bairro do cliente', required: false })
+  @ApiProperty({
+    description: 'Bairro residencial do cliente',
+    example: 'Batel',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   clientNeighborhood?: string;
 
-  @ApiProperty({ description: 'Cidade do cliente', required: false })
+  @ApiProperty({
+    description: 'Cidade residencial do cliente',
+    example: 'Curitiba',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   clientCity?: string;
 
-  @ApiProperty({ description: 'UF do cliente', required: false })
+  @ApiProperty({
+    description: 'UF residencial do cliente (2 caracteres)',
+    example: 'PR',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   @Length(2, 2, { message: 'O estado deve ter 2 caracteres.' })

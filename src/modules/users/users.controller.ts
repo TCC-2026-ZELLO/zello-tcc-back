@@ -19,6 +19,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -38,13 +40,34 @@ export class UsersController {
 
   @Post()
   @UseInterceptors(FileInterceptor('photo'))
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({
-    summary: 'Criar usuário',
-    description: 'Cria um novo usuário no sistema. Aceita multipart/form-data com foto opcional.',
+    summary: 'Cadastrar novo usuário (Cliente, Profissional ou Estabelecimento)',
+    description:
+      'Cria uma nova conta de usuário no sistema Zello e provisiona automaticamente o perfil correspondente (Cliente, Profissional ou Estabelecimento com endereço geocodificado). Suporta envio em JSON ou multipart/form-data com foto opcional.',
   })
-  @ApiResponse({ status: 201, description: 'Usuário criado com sucesso' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos' })
-  @ApiResponse({ status: 409, description: 'E-mail já cadastrado' })
+  @ApiBody({ type: CreateUserDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Usuário criado com sucesso.',
+    schema: {
+      example: {
+        status: 201,
+        data: {
+          id: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
+          nome: 'Mariana Costa Silva',
+          email: 'mariana.costa@zello.com.br',
+          phone: '41998765432',
+          roles: [{ id: 1, name: 'client' }],
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Dados de entrada inválidos.' })
+  @ApiResponse({
+    status: 409,
+    description: 'E-mail, CPF ou CNPJ já cadastrado.',
+  })
   async create(
     @Body() createUserDto: CreateUserDto,
     @UploadedFile() photo?: Express.Multer.File,
@@ -56,10 +79,24 @@ export class UsersController {
   @Get('profile')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Perfil do usuário autenticado',
-    description: 'Retorna os dados do usuário logado via JWT.',
+    summary: 'Obter perfil do usuário autenticado',
+    description:
+      'Retorna os dados completos da conta autenticada extraídos do token JWT e suas permissões ativas.',
   })
-  @ApiResponse({ status: 200, description: 'Perfil retornado com sucesso.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Perfil retornado com sucesso.',
+    schema: {
+      example: {
+        message: 'Acesso autorizado!',
+        userLoggedIn: {
+          id: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
+          email: 'mariana.costa@zello.com.br',
+          roles: ['client'],
+        },
+      },
+    },
+  })
   @ApiResponse({ status: 401, description: 'Token inválido ou ausente.' })
   getProfile(@Request() req) {
     return {
@@ -73,8 +110,9 @@ export class UsersController {
   @Roles('manager')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Listar todos os usuários',
-    description: 'Acesso restrito a usuários com role **manager**.',
+    summary: 'Listar todos os usuários cadastrados',
+    description:
+      'Retorna a listagem completa de usuários e seus respectivos perfis vinculados. Acesso restrito a usuários com role **manager**.',
   })
   @ApiResponse({ status: 200, description: 'Lista de usuários retornada.' })
   @ApiResponse({ status: 403, description: 'Sem permissão de acesso.' })
@@ -83,11 +121,15 @@ export class UsersController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Buscar usuário por ID' })
+  @ApiOperation({
+    summary: 'Buscar usuário por ID',
+    description:
+      'Consulta e retorna os dados públicos e vínculos de perfil (client, professional, manager) de um usuário específico a partir do seu UUID.',
+  })
   @ApiParam({
     name: 'id',
     description: 'UUID do usuário',
-    example: 'a3f1c2d4-e5b6-7890-abcd-ef1234567890',
+    example: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
   })
   @ApiResponse({ status: 200, description: 'Usuário encontrado.' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
@@ -99,14 +141,16 @@ export class UsersController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
-    summary: 'Atualizar usuário',
-    description: 'Apenas o próprio usuário ou um admin pode atualizar.',
+    summary: 'Atualizar dados cadastrais do usuário',
+    description:
+      'Permite atualizar informações pessoais, preferências de lembretes (E-mail/WhatsApp), endereço ou senha. Apenas o próprio titular da conta ou um administrador pode executar esta operação.',
   })
   @ApiParam({
     name: 'id',
     description: 'UUID do usuário',
-    example: 'a3f1c2d4-...',
+    example: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
   })
+  @ApiBody({ type: UpdateUserDto })
   @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso.' })
   @ApiResponse({
     status: 403,
@@ -126,17 +170,17 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @ApiResponse({ status: 204, description: 'Usuário removido' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({
-    summary: 'Remover usuário',
-    description: 'Apenas o próprio usuário ou um admin pode remover.',
+    summary: 'Remover conta de usuário',
+    description:
+      'Exclui permanentemente o registro do usuário do sistema. Operação permitida exclusivamente ao próprio titular da conta ou a um administrador.',
   })
   @ApiParam({
     name: 'id',
     description: 'UUID do usuário',
-    example: 'a3f1c2d4-...',
+    example: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
   })
   @ApiResponse({ status: 200, description: 'Usuário removido com sucesso.' })
   @ApiResponse({
@@ -155,14 +199,14 @@ export class UsersController {
   @Post(':id/append-client')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({
-    summary: 'Adiciona um perfil de cliente para um usuário específico',
+    summary: 'Vincular perfil de Cliente a um usuário existente',
     description:
-      'Rota pública para vincular perfil de cliente a um ID de usuário existente.',
+      'Adiciona a role e a entidade de perfil de Cliente a um usuário já registrado, permitindo que profissionais ou gestores também realizem agendamentos como clientes.',
   })
   @ApiParam({
     name: 'id',
     description: 'UUID do usuário',
-    example: 'uuid-aqui',
+    example: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
   })
   @ApiResponse({
     status: 201,
@@ -181,14 +225,14 @@ export class UsersController {
   @Post(':id/append-professional')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({
-    summary: 'Adiciona um perfil de profissional para um usuário específico',
+    summary: 'Vincular perfil de Profissional a um usuário existente',
     description:
-      'Rota pública para vincular perfil de profissional a um ID de usuário existente.',
+      'Adiciona a role e a entidade de perfil de Profissional a um usuário existente para que possa prestar serviços em estabelecimentos.',
   })
   @ApiParam({
     name: 'id',
     description: 'UUID do usuário',
-    example: 'uuid-aqui',
+    example: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
   })
   @ApiResponse({
     status: 201,
@@ -207,14 +251,14 @@ export class UsersController {
   @Post(':id/append-manager')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({
-    summary: 'Adiciona um perfil de gerente para um usuário específico',
+    summary: 'Vincular perfil de Gestor (Manager) a um usuário existente',
     description:
-      'Rota pública para vincular perfil de gerente a um ID de usuário existente.',
+      'Adiciona a role e a entidade de perfil de Gestor a um usuário já cadastrado, habilitando-o a administrar estabelecimentos.',
   })
   @ApiParam({
     name: 'id',
     description: 'UUID do usuário',
-    example: 'uuid-aqui',
+    example: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
   })
   @ApiResponse({
     status: 201,
@@ -231,6 +275,21 @@ export class UsersController {
   }
 
   @Patch(':id/promote-to-admin')
+  @ApiOperation({
+    summary: 'Promover usuário a Administrador do sistema',
+    description:
+      'Atribui a role global de administrador (**admin**) ao usuário especificado pelo UUID.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID do usuário a ser promovido',
+    example: 'a3f1c2d4-e5b6-4890-abcd-ef1234567890',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuário promovido a administrador com sucesso.',
+  })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
   async promoteToAdmin(@Param('id') id: string) {
     return await this.usersService.become_admin(id);
   }

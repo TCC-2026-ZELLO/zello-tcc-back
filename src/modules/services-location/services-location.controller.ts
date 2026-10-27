@@ -24,11 +24,14 @@ export class ServicesLocationController {
   @Get('location')
   @ApiOperation({
     summary:
-      'Busca estabelecimentos ativos com serviços cadastrados dentro do raio fixo de 10km.',
+      'Busca estabelecimentos ativos com serviços cadastrados dentro do raio fixo de 10km',
+    description:
+      'Utiliza funções espaciais PostGIS (ST_DWithin e ST_DistanceSphere) para localizar todos os estabelecimentos visíveis, adimplentes e com serviços ativos situados em um raio de até 10 quilômetros das coordenadas (latitude e longitude WGS84) do cliente, ordenados por proximidade.',
   })
   @ApiResponse({
     status: 200,
     description: 'Lista de estabelecimentos encontrados (pode ser vazia).',
+    type: [ServiceLocationResponseDto],
   })
   @ApiResponse({
     status: 400,
@@ -37,10 +40,11 @@ export class ServicesLocationController {
   async findByLocation(
     @Query() query: SearchServicesByLocationDto,
   ): Promise<ServicesByLocationHttpResponse> {
-    const result = await this.searchServicesByLocationService.findServicesByLocation(
-      query.latitude,
-      query.longitude,
-    );
+    const result =
+      await this.searchServicesByLocationService.findServicesByLocation(
+        query.latitude,
+        query.longitude,
+      );
 
     return { status: HttpStatus.OK, ...result };
   }
