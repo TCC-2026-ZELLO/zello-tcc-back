@@ -156,17 +156,58 @@ echo "URL do Frontend:                ${FRONT_URL}"
 echo "Swagger / Scalar Docs:          ${BACK_URL}/docs"
 echo "=============================================================================="
 echo ""
-echo "==> 8. Gerando Service Principal (AZURE_CREDENTIALS) para o GitHub Actions..."
-if AZURE_CREDS=$(az ad sp create-for-rbac \
-  --name "sp-zello-tcc-github-actions" \
-  --role contributor \
-  --scopes "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}" \
-  --sdk-auth 2>/dev/null); then
-  echo "Copie o JSON abaixo e salve no secret AZURE_CREDENTIALS nos dois repositórios GitHub:"
-  echo "------------------------------------------------------------------------------"
-  echo "$AZURE_CREDS"
-  echo "------------------------------------------------------------------------------"
-else
-  echo "NOTA: Sua conta estudante PUCPR (@pucpr.edu.br) bloqueia criação de Service Principal via CLI."
-  echo "Use o login via Azure CLI Token ou Publish Profile conforme instruções no chat."
-fi
+echo "==> 8. Criando Managed Identity + OIDC para o GitHub Actions (compatível com conta estudante PUCPR)..."
+IDENTITY_NAME="id-zello-github"
+
+az identity create \
+  --name "$IDENTITY_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --location "$LOCATION" \
+  --output none
+
+CLIENT_ID=$(az identity show --name "$IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" --query clientId --output tsv)
+PRINCIPAL_ID=$(az identity show --name "$IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" --query principalId --output tsv)
+TENANT_ID=$(az account show --query tenantId --output tsv)
+
+echo "    Atribuindo permissão Contributor no Resource Group '$RESOURCE_GROUP'..."
+az role assignment create \
+  --assignee-object-id "$PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role Contributor \
+  --scope "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}" \
+  --output none 2>/dev/null || true
+
+echo "    Configurando Federated Credentials (OIDC) para os repositórios GitHub..."
+for pair in \
+  "fc-back-develop:TCC-2026-ZELLO/zello-tcc-back:refs/heads/develop" \
+  "fc-back-main:TCC-2026-ZELLO/zello-tcc-back:refs/heads/main" \
+  "fc-back-upper-dev:TCC-2026-ZELLO/ZELLO-TCC-back:refs/heads/develop" \
+  "fc-back-upper-main:TCC-2026-ZELLO/ZELLO-TCC-back:refs/heads/main" \
+  "fc-front-develop:TCC-2026-ZELLO/ZELLO-TCC-Front:refs/heads/develop" \
+  "fc-front-main:TCC-2026-ZELLO/ZELLO-TCC-Front:refs/heads/main"; do
+  FC_NAME="${pair%%:*}"
+  REST="${pair#*:}"
+  REPO="${REST%%:*}"
+  REF="${REST#*:}"
+
+  az identity federated-credential create \
+    --name "$FC_NAME" \
+    --identity-name "$IDENTITY_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --issuer "https://token.actions.githubusercontent.com" \
+    --subject "repo:${REPO}:ref:${REF}" \
+    --audiences "api://AzureADTokenExchange" \
+    --output none 2>/dev/null || true
+done
+
+echo ""
+echo "Copie o JSON abaixo e salve no secret AZURE_CREDENTIALS nos dois repositórios GitHub:"
+echo "------------------------------------------------------------------------------"
+cat <<EOF
+{
+  "clientId": "${CLIENT_ID}",
+  "tenantId": "${TENANT_ID}",
+  "subscriptionId": "${SUBSCRIPTION_ID}"
+}
+EOF
+echo "------------------------------------------------------------------------------"

@@ -2,11 +2,12 @@ name: 'CI/CD - Backend (GHCR + Azure Container Apps)'
 
 on:
   push:
-    branches: ['develop', 'main']
+    branches: ['main']
   pull_request:
-    branches: ['develop', 'main']
+    branches: ['main']
 
 permissions:
+  id-token: write
   contents: read
   packages: write
 
@@ -77,10 +78,12 @@ jobs:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     steps:
-      - name: Login no Azure
+      - name: Login no Azure (Managed Identity OIDC)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
+          tenant-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
+          subscription-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
 
       - name: Configurar GHCR e Atualizar Container App (zello-back)
         uses: azure/CLI@v2
