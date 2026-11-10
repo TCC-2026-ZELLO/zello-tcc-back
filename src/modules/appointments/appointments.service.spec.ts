@@ -418,7 +418,7 @@ describe('AppointmentsService', () => {
         id: '1',
         status: 'CONFIRMED',
         client: { id: 'u1' },
-        date: appDate.toISOString().split('T')[0],
+        date: appDate.toLocaleDateString('sv-SE'),
         startTime: appDate.toTimeString().substring(0, 5),
         confirmedAt,
       };
@@ -440,7 +440,7 @@ describe('AppointmentsService', () => {
         id: '1',
         status: 'CONFIRMED',
         client: { id: 'u1' },
-        date: appDate.toISOString().split('T')[0],
+        date: appDate.toLocaleDateString('sv-SE'),
         startTime: appDate.toTimeString().substring(0, 5),
         confirmedAt,
       };

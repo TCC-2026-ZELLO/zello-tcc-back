@@ -16,7 +16,8 @@ COPY . .
 # Compila o projeto NestJS
 RUN npm run build
 
-# Expõe a porta que o NestJS usa (padrão 3001)
+# Define o fuso horário padrão (Brasília -03:00) e expõe a porta 3001
+ENV TZ=America/Sao_Paulo
 EXPOSE 3001
 
 # Comando para rodar a aplicação

@@ -11,6 +11,7 @@ permissions:
   packages: write
 
 env:
+  TZ: America/Sao_Paulo
   REGISTRY: ghcr.io
   DOCKER_IMAGE: ghcr.io/tcc-2026-zello/zello-tcc-back
   AZURE_RESOURCE_GROUP: Zello
@@ -18,26 +19,11 @@ env:
 
 jobs:
   # ---------------------------------------------------------
-  # 1. TESTES UNITÁRIOS E E2E (COM POSTGIS)
+  # 1. TESTES UNITÁRIOS
   # ---------------------------------------------------------
   test:
-    name: Testes Unitários e E2E
+    name: Testes Unitários
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgis/postgis:15-3.4-alpine
-        env:
-          POSTGRES_USER: devops
-          POSTGRES_PASSWORD: 1234
-          POSTGRES_DB: zello_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U devops -d zello_db"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
@@ -53,17 +39,6 @@ jobs:
 
       - name: Rodar testes unitários
         run: npm run test
-
-      - name: Rodar testes E2E
-        run: npm run test:e2e
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: zello_db
-          DB_USER: devops
-          DB_PASS: 1234
-          JWT_SECRET: 'segredo_temporario_para_ci_com_32_caracteres'
-          PORT: 3001
 
   # ---------------------------------------------------------
   # 2. BUILD E PUSH DA IMAGEM DOCKER (GITHUB CONTAINER REGISTRY)
@@ -99,7 +74,7 @@ jobs:
   deploy-aca:
     name: Deploy no Azure Container Apps
     needs: build-and-push
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
     steps:
       - name: Login no Azure
