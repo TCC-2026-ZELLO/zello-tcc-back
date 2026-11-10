@@ -66,18 +66,20 @@ export class AuthController {
 
     const data = await this.authService.login(user);
 
+    const isProd = process.env.NODE_ENV === 'production';
+
     res.cookie('access_token', data.access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 3600000,
     });
 
     res.cookie('refresh_token', data.refresh_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -106,8 +108,17 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Usuário não autenticado.' })
   async logout(@Req() req, @Res({ passthrough: true }) res) {
-    res.clearCookie('access_token', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/' });
+    const isProd = process.env.NODE_ENV === 'production';
+    res.clearCookie('access_token', {
+      path: '/',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+    });
+    res.clearCookie('refresh_token', {
+      path: '/',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+    });
 
     if (req.user && req.user.id) {
       await this.authService.logout(req.user.id);
@@ -177,18 +188,20 @@ export class AuthController {
 
     const data = await this.authService.refresh(refreshToken);
 
+    const isProd = process.env.NODE_ENV === 'production';
+
     res.cookie('access_token', data.access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 3600000,
     });
 
     res.cookie('refresh_token', data.refresh_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -223,19 +236,20 @@ export class AuthController {
   })
   async googleAuthRedirect(@Req() req, @Res() res) {
     const data = await this.authService.validateGoogleUser(req.user);
+    const isProd = process.env.NODE_ENV === 'production';
 
     res.cookie('access_token', data.access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 3600000,
     });
 
     res.cookie('refresh_token', data.refresh_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });

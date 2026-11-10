@@ -1,0 +1,124 @@
+name: 'CI/CD - Backend (GHCR + Azure Container Apps)'
+
+on:
+  push:
+    branches: ['develop', 'main']
+  pull_request:
+    branches: ['develop', 'main']
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  DOCKER_IMAGE: ghcr.io/tcc-2026-zello/zello-tcc-back
+  AZURE_RESOURCE_GROUP: Zello
+  AZURE_CONTAINER_APP_NAME: zello-back
+
+jobs:
+  # ---------------------------------------------------------
+  # 1. TESTES UNITÁRIOS E E2E (COM POSTGIS)
+  # ---------------------------------------------------------
+  test:
+    name: Testes Unitários e E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:15-3.4-alpine
+        env:
+          POSTGRES_USER: devops
+          POSTGRES_PASSWORD: 1234
+          POSTGRES_DB: zello_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U devops -d zello_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar testes unitários
+        run: npm run test
+
+      - name: Rodar testes E2E
+        run: npm run test:e2e
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: zello_db
+          DB_USER: devops
+          DB_PASS: 1234
+          JWT_SECRET: 'segredo_temporario_para_ci_com_32_caracteres'
+          PORT: 3001
+
+  # ---------------------------------------------------------
+  # 2. BUILD E PUSH DA IMAGEM DOCKER (GITHUB CONTAINER REGISTRY)
+  # ---------------------------------------------------------
+  build-and-push:
+    name: Build & Push (ghcr.io)
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Login no GitHub Container Registry (Automático via GITHUB_TOKEN)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e Push da imagem para o GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+
+  # ---------------------------------------------------------
+  # 3. DEPLOY NO AZURE CONTAINER APPS (GITHUB ACTIONS)
+  # ---------------------------------------------------------
+  deploy-aca:
+    name: Deploy no Azure Container Apps
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login no Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configurar GHCR e Atualizar Container App (zello-back)
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az containerapp registry set \
+              --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --server ${{ env.REGISTRY }} \
+              --username ${{ github.actor }} \
+              --password ${{ secrets.GITHUB_TOKEN }}
+
+            az containerapp update \
+              --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --image ${{ env.DOCKER_IMAGE }}:${{ github.sha }}

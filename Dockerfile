@@ -16,8 +16,8 @@ COPY . .
 # Compila o projeto NestJS
 RUN npm run build
 
-# Expõe a porta que o NestJS usa (geralmente 3000)
-EXPOSE 3000
+# Expõe a porta que o NestJS usa (padrão 3001)
+EXPOSE 3001
 
 # Comando para rodar a aplicação
 CMD ["npm", "run", "start:prod"]

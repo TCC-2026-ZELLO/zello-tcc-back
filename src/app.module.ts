@@ -51,6 +51,10 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
         autoLoadEntities: true,
         synchronize: true, // desativar quando em produção
         dropSchema: false, // ativar quando mudanças nas entidades quebrar migração
+        ssl:
+          configService.get<string>('DB_SSL') === 'true'
+            ? { rejectUnauthorized: false }
+            : false,
       }),
     }),
 
