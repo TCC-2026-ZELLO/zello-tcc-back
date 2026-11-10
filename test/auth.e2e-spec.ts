@@ -4,8 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DataSource } from 'typeorm';
 import {
-  Usuario,
-  AuthProvider,
+  User,
 } from '../src/modules/users/entities/user.entity';
 import * as bcrypt from 'bcrypt';
 

@@ -1,0 +1,102 @@
+name: 'CI/CD - Backend (GHCR + Azure Container Apps)'
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+env:
+  TZ: America/Sao_Paulo
+  REGISTRY: ghcr.io
+  DOCKER_IMAGE: ghcr.io/tcc-2026-zello/zello-tcc-back
+  AZURE_RESOURCE_GROUP: Zello
+  AZURE_CONTAINER_APP_NAME: zello-back
+
+jobs:
+  # ---------------------------------------------------------
+  # 1. TESTES UNITÁRIOS
+  # ---------------------------------------------------------
+  test:
+    name: Testes Unitários
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar testes unitários
+        run: npm run test
+
+  # ---------------------------------------------------------
+  # 2. BUILD E PUSH DA IMAGEM DOCKER (GITHUB CONTAINER REGISTRY)
+  # ---------------------------------------------------------
+  build-and-push:
+    name: Build & Push (ghcr.io)
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Login no GitHub Container Registry (Automático via GITHUB_TOKEN)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e Push da imagem para o GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:latest
+            ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+
+  # ---------------------------------------------------------
+  # 3. DEPLOY NO AZURE CONTAINER APPS (GITHUB ACTIONS)
+  # ---------------------------------------------------------
+  deploy-aca:
+    name: Deploy no Azure Container Apps
+    needs: build-and-push
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login no Azure (Managed Identity OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
+          tenant-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
+          subscription-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
+
+      - name: Configurar GHCR e Atualizar Container App (zello-back)
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az containerapp registry set \
+              --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --server ${{ env.REGISTRY }} \
+              --username ${{ github.actor }} \
+              --password ${{ secrets.GITHUB_TOKEN }}
+
+            az containerapp update \
+              --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --image ${{ env.DOCKER_IMAGE }}:${{ github.sha }}

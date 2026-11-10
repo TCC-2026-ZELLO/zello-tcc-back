@@ -1,4 +1,3 @@
-// Tratamento para e-mail duplicado no PostgreSQL
 import {
   ExceptionFilter,
   Catch,

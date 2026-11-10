@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -17,12 +18,24 @@ import { AvailabilityModule } from './modules/availability/availability.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { MediaModule } from './modules/media/media.module';
+import { BusinessProfessionalsModule } from './modules/business-professionals/business-professionals.module';
+import { BusinessManagersModule } from './modules/business-managers/business-managers.module';
+import { FilesModule } from './modules/files/files.module';
+import { FilesService } from './modules/files/files.service';
+import { AddressesModule } from './modules/addresses/addresses.module';
+import { ServicesLocationModule } from './modules/services-location/services-location.module';
+import { LookupController } from './common/controllers/lookup.controller';
+import { ViaCepService } from './common/services/viacep.service';
+import { CnpjLookupService } from './common/services/cnpj-lookup.service';
+import { CombosModule } from './modules/combos/combos.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -38,13 +51,17 @@ import { MediaModule } from './modules/media/media.module';
         autoLoadEntities: true,
         synchronize: true, // desativar quando em produção
         dropSchema: false, // ativar quando mudanças nas entidades quebrar migração
+        ssl:
+          configService.get<string>('DB_SSL') === 'true'
+            ? { rejectUnauthorized: false }
+            : false,
       }),
     }),
 
     ThrottlerModule.forRoot([
       {
-        ttl: 60000, // milissegundos = 60 segundos)
-        limit: 10,
+        ttl: 60000,
+        limit: 9999999,
       },
     ]),
 
@@ -60,14 +77,26 @@ import { MediaModule } from './modules/media/media.module';
     AppointmentsModule,
     ReviewsModule,
     MediaModule,
+    BusinessProfessionalsModule,
+    BusinessManagersModule,
+    BusinessProfessionalsModule,
+    BusinessManagersModule,
+    FilesModule,
+    AddressesModule,
+    ServicesLocationModule,
+    CombosModule,
+    DashboardModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, LookupController],
   providers: [
     AppService,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    FilesService,
+    ViaCepService,
+    CnpjLookupService,
   ],
 })
 export class AppModule {}

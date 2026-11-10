@@ -8,7 +8,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Instala as dependências
-RUN npm install
+RUN npm install --no-audit --no-fund --quiet
 
 # Copia o restante do código
 COPY . .
@@ -16,8 +16,9 @@ COPY . .
 # Compila o projeto NestJS
 RUN npm run build
 
-# Expõe a porta que o NestJS usa (geralmente 3000)
-EXPOSE 3000
+# Define o fuso horário padrão (Brasília -03:00) e expõe a porta 3001
+ENV TZ=America/Sao_Paulo
+EXPOSE 3001
 
 # Comando para rodar a aplicação
 CMD ["npm", "run", "start:prod"]

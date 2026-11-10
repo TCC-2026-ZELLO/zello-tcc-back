@@ -41,6 +41,10 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
         const mailPort = configService.get<string>('MAIL_PORT');
         const mailUser = configService.get<string>('MAIL_USER');
         const mailPass = configService.get<string>('MAIL_PASS');
+        const mailSecureStr = configService.get<string>('MAIL_SECURE');
+        const mailFrom =
+          configService.get<string>('MAIL_FROM') ||
+          '"Zello Suporte" <suporte@zello.com>';
 
         if (!mailHost || !mailPort || !mailUser || !mailPass) {
           throw new Error(
@@ -48,18 +52,24 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
           );
         }
 
+        // Se MAIL_SECURE estiver definido, usa o valor booleano correspondente.
+        // Caso contrário, usa secure: true para porta 465 (SMTPS) e false para as demais (STARTTLS).
+        const isSecure = mailSecureStr
+          ? mailSecureStr === 'true'
+          : Number(mailPort) === 465;
+
         return {
           transport: {
             host: mailHost,
             port: Number(mailPort),
-            secure: false,
+            secure: isSecure,
             auth: {
               user: mailUser,
               pass: mailPass,
             },
           },
           defaults: {
-            from: '"Zello Suporte" <suporte@zello.com>',
+            from: mailFrom,
           },
         };
       },
@@ -67,6 +77,6 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy],
-  exports: [AuthService],
+  exports: [AuthService, MailerModule],
 })
 export class AuthModule {}

@@ -4,11 +4,10 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { map, Observable, tap } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 
 @Injectable()
 export class LoggersInterceptor implements NestInterceptor {
-  //Essa classe é ativada em todas as requisições, mas so é finalizada se a requisição der 200.
   intercept(
     context: ExecutionContext,
     next: CallHandler<any>,

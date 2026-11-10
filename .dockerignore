@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.git
+.github
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+.wwebjs_auth
+.wwebjs_cache
+uploads/*
+*.log
+.DS_Store
