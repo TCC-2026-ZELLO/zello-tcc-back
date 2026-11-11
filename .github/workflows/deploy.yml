@@ -85,16 +85,14 @@ jobs:
           tenant-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).tenantId }}
           subscription-id: ${{ fromJSON(secrets.AZURE_CREDENTIALS).subscriptionId }}
 
-      - name: Configurar GHCR e Atualizar Container App (zello-back)
+      - name: Atualizar Container App (zello-back)
         uses: azure/CLI@v2
         with:
           inlineScript: |
-            az containerapp registry set \
+            az containerapp registry remove \
               --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
               --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --server ${{ env.REGISTRY }} \
-              --username ${{ github.actor }} \
-              --password ${{ secrets.GITHUB_TOKEN }}
+              --server ${{ env.REGISTRY }} 2>/dev/null || true
 
             az containerapp update \
               --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
