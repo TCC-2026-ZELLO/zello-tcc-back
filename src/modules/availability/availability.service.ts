@@ -215,25 +215,33 @@ export class AvailabilityService {
           'Informe o estabelecimento ou o profissional do bloqueio.',
         );
       }
-      if (businessId) {
-        await this.validateManagerAuthority(requester.id, businessId);
-      }
-      if (professionalId) {
+      // A decisão é calculada por completo antes de qualquer ação: cada alvo
+      // informado precisa ser autorizado, e a ausência de um alvo nunca
+      // dispensa a verificação do outro (v5.0.0-8.2.2).
+      const businessAllowed =
+        businessId === undefined || businessId === null || businessId === ''
+          ? true
+          : await this.tenantAccess.managesBusiness(requester.id, businessId);
+      let professionalAllowed = true;
+      if (
+        professionalId !== undefined &&
+        professionalId !== null &&
+        professionalId !== ''
+      ) {
         const own = await this.profRepo.findOne({
           where: { user: { id: requester.id } },
         });
-        const isSelf = !!own && own.id === professionalId;
-        if (
-          !isSelf &&
-          !(await this.tenantAccess.managesProfessional(
+        professionalAllowed =
+          (!!own && own.id === professionalId) ||
+          (await this.tenantAccess.managesProfessional(
             requester.id,
             professionalId,
-          ))
-        ) {
-          throw new ForbiddenException(
-            'Acesso negado: este profissional não pertence a um estabelecimento que você gerencia.',
-          );
-        }
+          ));
+      }
+      if (!businessAllowed || !professionalAllowed) {
+        throw new ForbiddenException(
+          'Acesso negado: o bloqueio precisa ser de um estabelecimento ou profissional que você gerencia.',
+        );
       }
     }
 

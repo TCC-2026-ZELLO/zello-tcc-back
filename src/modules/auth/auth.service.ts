@@ -25,12 +25,15 @@ import {
 import { LoginAttemptLimiter } from './login-attempt.limiter';
 
 /**
- * Hash bcrypt (custo 10) de um valor aleatório descartado. Usado para gastar o
+ * Hash bcrypt (custo 10) de um valor aleatório gerado na inicialização e
+ * descartado (nenhum hash fica no código-fonte). Usado para gastar o
  * mesmo tempo de CPU quando o e-mail não existe, de modo que o tempo de
  * resposta não revele quais contas estão cadastradas.
  */
-const TIMING_EQUALIZER_HASH =
-  '$2b$10$TyO23hUoVfeTXF.Wo/fd0.KTFewRmQ77nJiDyGYfZMHZoq3MCVvuC';
+const TIMING_EQUALIZER_HASH = bcrypt.hashSync(
+  randomBytes(32).toString('hex'),
+  10,
+);
 
 const INVALID_CREDENTIALS = 'E-mail ou senha incorretos.';
 

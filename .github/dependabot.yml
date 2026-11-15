@@ -1,10 +1,14 @@
 # v5.0.0-15.2.1: atualização automática de dependências. Os prazos de
 # remediação estão definidos em docs/security/ESPECIFICACAO_DIRETRIZES_SEGURANCA_ZELLO.md (V15).
+# cooldown (7 dias): evita adotar versões recém-publicadas, que podem ser
+# maliciosas ou instáveis. Atualizações de segurança do Dependabot não sofrem atraso.
 version: 2
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
     target-branch: 'develop'
+    cooldown:
+      default-days: 7
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -16,10 +20,14 @@ updates:
   - package-ecosystem: 'github-actions'
     directory: '/'
     target-branch: 'develop'
+    cooldown:
+      default-days: 7
     schedule:
       interval: 'monthly'
   - package-ecosystem: 'docker'
     directory: '/'
     target-branch: 'develop'
+    cooldown:
+      default-days: 7
     schedule:
       interval: 'monthly'

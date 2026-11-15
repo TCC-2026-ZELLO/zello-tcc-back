@@ -15,5 +15,16 @@ const HTML_ENTITIES: Record<string, string> = {
 
 export function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return '';
-  return String(value).replace(/[&<>"'`=/]/g, (char) => HTML_ENTITIES[char]);
+  // Objetos são serializados como JSON (nunca "[object Object]") antes de codificar.
+  let text: string;
+  if (typeof value === 'string') text = value;
+  else if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  )
+    text = value.toString();
+  else if (typeof value === 'object') text = JSON.stringify(value);
+  else text = '';
+  return text.replace(/[&<>"'`=/]/g, (char) => HTML_ENTITIES[char]);
 }

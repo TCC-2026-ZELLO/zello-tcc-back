@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Executar análise do Semgrep
         # O scan gera um arquivo padronizado no formato SARIF
@@ -38,7 +38,7 @@ jobs:
             p/nodejs
 
       - name: Publicar resultados do Semgrep no GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         if: always() # Garante envio mesmo se vulnerabilidades forem encontradas
         with:
           sarif_file: semgrep.sarif
@@ -49,16 +49,16 @@ jobs:
 
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Inicializar CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           languages: 'javascript-typescript'
           queries: security-extended,security-and-quality
 
       - name: Executar análise do CodeQL
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           category: '/language:javascript-typescript'
 
@@ -69,10 +69,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Configurar Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -82,8 +82,9 @@ jobs:
         env:
           PUPPETEER_SKIP_DOWNLOAD: 'true'
 
-      - name: npm audit (produção, nível alto)
-        run: npm audit --omit=dev --audit-level=high
+      - name: npm audit (produção) com gate de risco aceito
+        # Falha com crítica ou alta fora da lista documentada em scripts/audit-gate.mjs.
+        run: node scripts/audit-gate.mjs
 
   # v5.0.0-13.3.1: nenhum segredo versionado no repositório nem no histórico.
   secrets:
@@ -91,14 +92,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do repositório (histórico completo)
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
-      - name: Executar Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # CLI oficial do Gitleaks (licença MIT). A gitleaks-action exige licença
+      # paga para repositórios de organização, por isso não é usada.
+      - name: Executar Gitleaks (histórico completo)
+        run: >-
+          docker run --rm -v "${{ github.workspace }}:/repo" --entrypoint sh
+          ghcr.io/gitleaks/gitleaks:v8.24.0 -c
+          "git config --global --add safe.directory /repo &&
+          gitleaks git /repo --redact --verbose --exit-code 1"
 
   # v5.0.0-1.3.2 / 1.2.5: regras de segurança do ESLint (eval, child_process,
   # ReDoS, require dinâmico).
@@ -107,10 +112,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Configurar Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '20'
           cache: 'npm'

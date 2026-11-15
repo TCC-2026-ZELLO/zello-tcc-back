@@ -337,7 +337,7 @@ A remoção é aplicada por um interceptor global (`SensitiveDataInterceptor`), 
 ### 11.2 Processo
 
 1. O Dependabot abre PRs semanais (npm) e mensais (GitHub Actions e Docker) para a branch `develop`.
-2. O CI roda `npm audit --omit=dev --audit-level=high` em todo push e PR e falha com vulnerabilidade alta ou crítica em produção.
+2. O CI roda `npm audit --omit=dev` em todo push e PR pelo gate `scripts/audit-gate.mjs`, que falha com qualquer vulnerabilidade crítica e com vulnerabilidade alta fora da lista de risco aceito (hoje só a cadeia `extract-zip` do `whatsapp-web.js`, sem versão corrigida publicada; download do navegador desativado e recurso desligado em produção). Entradas da lista que deixam de aparecer no relatório geram aviso para remoção.
 3. Gitleaks, Semgrep, CodeQL e ESLint Security rodam no mesmo pipeline.
 4. Dependências sem uso são removidas (nesta revisão: `firebase`, `firebase-admin`, `node-fetch`).
 5. `package-lock.json` é versionado e as imagens usam `npm ci`.
