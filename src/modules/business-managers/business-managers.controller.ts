@@ -86,8 +86,11 @@ export class BusinessManagersController {
     status: 200,
     description: 'Lista de gestores da empresa retornada com sucesso.',
   })
-  findByBusiness(@Param('businessId', ParseUUIDPipe) businessId: string) {
-    return this.bmService.findByBusiness(businessId);
+  findByBusiness(
+    @Request() req: { user: ActiveUser },
+    @Param('businessId', ParseUUIDPipe) businessId: string,
+  ) {
+    return this.bmService.findByBusinessFor(businessId, req.user);
   }
 
   @Get(':id')
@@ -106,8 +109,11 @@ export class BusinessManagersController {
     status: 200,
     description: 'Detalhes do vínculo retornados com sucesso.',
   })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.bmService.findOne(id);
+  findOne(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.bmService.findOneFor(id, req.user);
   }
 
   @Delete(':id')

@@ -10,6 +10,7 @@ import { BusinessManager } from './entities/business-manager.entity';
 import { CreateBusinessManagerDto } from './dto/create-business-manager.dto';
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
+import { TenantAccessService } from '../../common/security/tenant-access.service';
 
 @Injectable()
 export class BusinessManagersService {
@@ -18,7 +19,25 @@ export class BusinessManagersService {
     private readonly bmRepo: Repository<BusinessManager>,
     @InjectRepository(Manager)
     private readonly managerRepo: Repository<Manager>,
+    private readonly tenantAccess: TenantAccessService,
   ) {}
+
+  /** Consulta de um vínculo restrita a admin ou gestor do mesmo estabelecimento (v5.0.0-8.4.1). */
+  async findOneFor(id: string, requester: ActiveUser) {
+    const link = await this.findOne(id);
+    await this.tenantAccess.assertManagesBusiness(requester, link.business.id, {
+      allowAdmin: true,
+    });
+    return link;
+  }
+
+  /** Lista de gestores de um estabelecimento, restrita a admin ou gestor dele. */
+  async findByBusinessFor(businessId: string, requester: ActiveUser) {
+    await this.tenantAccess.assertManagesBusiness(requester, businessId, {
+      allowAdmin: true,
+    });
+    return this.findByBusiness(businessId);
+  }
 
   async create(
     dto: CreateBusinessManagerDto,

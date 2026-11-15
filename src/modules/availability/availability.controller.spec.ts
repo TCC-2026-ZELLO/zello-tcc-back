@@ -32,7 +32,7 @@ describe('AvailabilityController', () => {
     expect(await controller.createOperatingHour(req, {} as any)).toEqual({
       id: 'oh1',
     });
-    expect(await controller.createShift({} as any)).toEqual({ id: 'sh1' });
+    expect(await controller.createShift(req, {} as any)).toEqual({ id: 'sh1' });
     expect(await controller.createException(req, {} as any)).toEqual([
       { id: 'ex1' },
     ]);

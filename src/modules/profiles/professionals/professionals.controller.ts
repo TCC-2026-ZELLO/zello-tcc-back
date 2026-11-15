@@ -34,30 +34,9 @@ import { SucessInterceptor } from '../../../common/interceptors/success-intercep
 import { ActiveUser } from '../../auth/interfaces/active-user.interface';
 import { FilesService } from '../../files/files.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { uploadOptions } from '../../../common/upload/file-validation';
 
-const QUALIFICATION_FILE_OPTIONS = {
-  storage: memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-  fileFilter: (_req: any, file: Express.Multer.File, cb: any) => {
-    const ALLOWED_MIMES = [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (ALLOWED_MIMES.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(
-        new BadRequestException(
-          'Formato de arquivo não suportado. Envie JPEG, PNG, WEBP ou PDF.',
-        ),
-        false,
-      );
-    }
-  },
-};
+const QUALIFICATION_FILE_OPTIONS = uploadOptions('document');
 
 @ApiTags('professionals')
 @Controller('professionals')
@@ -96,7 +75,7 @@ export class ProfessionalsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('professional')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadOptions('image')))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Atualizar foto de perfil (avatar) do profissional',
@@ -132,7 +111,7 @@ export class ProfessionalsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('professional')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadOptions('image')))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Atualizar imagem de capa (banner) do profissional',
@@ -168,7 +147,7 @@ export class ProfessionalsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('professional')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadOptions('image')))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Adicionar foto de trabalho ao portfólio do profissional',
@@ -289,6 +268,7 @@ export class ProfessionalsController {
     const certificateUrl = await this.filesService.uploadPublicFile(
       file,
       'qualifications',
+      'document',
     );
     return this.professionalsService.addQualification(
       req.user.id,
@@ -325,7 +305,11 @@ export class ProfessionalsController {
     @Body() dto: UpdateQualificationDto,
   ) {
     const newCertificateUrl = file
-      ? await this.filesService.uploadPublicFile(file, 'qualifications')
+      ? await this.filesService.uploadPublicFile(
+          file,
+          'qualifications',
+          'document',
+        )
       : undefined;
     return this.professionalsService.updateQualification(
       req.user.id,

@@ -61,3 +61,66 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: '/language:javascript-typescript'
+
+  # v5.0.0-15.2.1: auditoria de dependências (SCA). Falha o pipeline com
+  # vulnerabilidade alta ou crítica em dependência de produção.
+  sca:
+    name: SCA - npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+
+      - name: npm audit (produção, nível alto)
+        run: npm audit --omit=dev --audit-level=high
+
+  # v5.0.0-13.3.1: nenhum segredo versionado no repositório nem no histórico.
+  secrets:
+    name: Secret Scan - Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório (histórico completo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Executar Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # v5.0.0-1.3.2 / 1.2.5: regras de segurança do ESLint (eval, child_process,
+  # ReDoS, require dinâmico).
+  eslint-security:
+    name: ESLint Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+
+      - name: ESLint (somente regras de segurança)
+        run: >-
+          npx eslint "src/**/*.ts" --no-inline-config
+          --rule '{"@typescript-eslint/no-unsafe-member-access":"off","@typescript-eslint/no-unsafe-call":"off","@typescript-eslint/no-unsafe-assignment":"off","@typescript-eslint/no-unsafe-return":"off","@typescript-eslint/no-unsafe-argument":"off","@typescript-eslint/require-await":"off","@typescript-eslint/no-unused-vars":"off","@typescript-eslint/no-unnecessary-type-assertion":"off","@typescript-eslint/no-wrapper-object-types":"off","@typescript-eslint/unbound-method":"off","@typescript-eslint/no-floating-promises":"off","prettier/prettier":"off"}'

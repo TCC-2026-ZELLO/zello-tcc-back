@@ -18,5 +18,6 @@ export class LoginDto {
   })
   @IsNotEmpty({ message: 'A senha é obrigatória.' })
   @IsString()
+  @MaxLength(128, { message: 'Senha inválida.' })
   password: string;
 }

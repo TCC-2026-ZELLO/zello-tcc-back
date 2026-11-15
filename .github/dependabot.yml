@@ -1,0 +1,25 @@
+# v5.0.0-15.2.1: atualização automática de dependências. Os prazos de
+# remediação estão definidos em docs/security/ESPECIFICACAO_DIRETRIZES_SEGURANCA_ZELLO.md (V15).
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    target-branch: 'develop'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    labels: ['dependencies', 'security']
+    groups:
+      nestjs:
+        patterns: ['@nestjs/*']
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    target-branch: 'develop'
+    schedule:
+      interval: 'monthly'
+  - package-ecosystem: 'docker'
+    directory: '/'
+    target-branch: 'develop'
+    schedule:
+      interval: 'monthly'

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateBusinessManagerDto {
@@ -7,8 +7,7 @@ export class CreateBusinessManagerDto {
     example: '8f14e45f-ceea-467a-9a38-1b4d5e6f7a8b',
   })
   @IsNotEmpty()
-  //@IsUUID()
-  @IsString()
+  @IsUUID()
   managerId: string;
 
   @ApiProperty({
@@ -16,7 +15,6 @@ export class CreateBusinessManagerDto {
     example: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
   })
   @IsNotEmpty()
-  //@IsUUID()
-  @IsString()
+  @IsUUID()
   businessId: string;
 }

@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsString, MinLength, Matches } from 'class-validator';
+import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsAcceptablePassword } from '../../../common/security/password-policy';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ResetPasswordDto {
@@ -8,6 +9,7 @@ export class ResetPasswordDto {
   })
   @IsNotEmpty({ message: 'O token é obrigatório.' })
   @IsString()
+  @Matches(/^[a-f0-9]{64}$/, { message: 'Token inválido.' })
   token: string;
 
   @ApiProperty({
@@ -18,10 +20,6 @@ export class ResetPasswordDto {
   })
   @IsNotEmpty({ message: 'A senha é obrigatória.' })
   @IsString()
-  @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres.' })
-  @Matches(/(?=.*\d)(?=.*\W+)(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message:
-      'A senha deve conter letras maiúsculas, minúsculas, números e caracteres especiais.',
-  })
+  @IsAcceptablePassword()
   newPassword: string;
 }

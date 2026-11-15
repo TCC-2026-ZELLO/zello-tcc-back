@@ -12,6 +12,10 @@ import { BusinessProfessional } from '../business-professionals/entities/busines
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
+import {
+  Requester,
+  TenantAccessService,
+} from '../../common/security/tenant-access.service';
 
 @Injectable()
 export class CatalogService {
@@ -25,26 +29,21 @@ export class CatalogService {
     @InjectRepository(BusinessProfessional)
     private readonly bpRepo: Repository<BusinessProfessional>,
     private readonly professionalsService: ProfessionalsService,
+    private readonly tenantAccess: TenantAccessService,
   ) {}
   async create(dto: CreateServiceDto, userId: string, businessId: string) {
-    console.log('--- DEBUG CATALOG CREATE ---');
-    console.log('User ID do Token:', userId);
-    console.log('Business ID vindo da URL:', businessId);
-
     const manager = await this.managerRepo.findOne({
       where: { user: { id: userId } },
     });
 
-    console.log('Manager encontrado no banco:', manager?.id);
-
-    const hasAccess = await this.businessManagerRepo.findOne({
-      where: {
-        manager: { id: manager?.id },
-        business: { id: businessId },
-      },
-    });
-
-    console.log('Vínculo encontrado (hasAccess):', hasAccess ? 'SIM' : 'NÃO');
+    const hasAccess = manager
+      ? await this.businessManagerRepo.findOne({
+          where: {
+            manager: { id: manager.id },
+            business: { id: businessId },
+          },
+        })
+      : null;
 
     if (!hasAccess) {
       throw new ForbiddenException(
@@ -75,8 +74,14 @@ export class CatalogService {
     return service;
   }
 
-  async update(id: string, dto: UpdateServiceDto) {
+  async update(id: string, dto: UpdateServiceDto, requester: Requester) {
     const service = await this.findOne(id);
+    // v5.0.0-8.4.1: o serviço só pode ser alterado por gestor do
+    // estabelecimento ao qual ele pertence.
+    await this.tenantAccess.assertManagesBusiness(
+      requester,
+      service.business.id,
+    );
     const { name, description, durationMinutes, cleanupMinutes, price } = dto;
 
     this.serviceRepo.merge(service, {
@@ -90,8 +95,12 @@ export class CatalogService {
     return await this.serviceRepo.save(service);
   }
 
-  async remove(id: string) {
+  async remove(id: string, requester: Requester) {
     const service = await this.findOne(id);
+    await this.tenantAccess.assertManagesBusiness(
+      requester,
+      service.business.id,
+    );
 
     await this.serviceRepo.save(service);
 

@@ -15,6 +15,12 @@ import { BusinessProfessionalService } from './entities/business-professional-se
 import { Professional } from '../profiles/professionals/entities/professional.entity';
 import { ProfessionalShift } from '../availability/entities/professional-shift.entity';
 import { BusinessOperatingHour } from '../availability/entities/business_operating_hour.entity';
+import { Service } from '../catalog/entities/service.entity';
+import { In } from 'typeorm';
+import {
+  Requester,
+  TenantAccessService,
+} from '../../common/security/tenant-access.service';
 
 @Injectable()
 export class BusinessProfessionalsService {
@@ -36,7 +42,19 @@ export class BusinessProfessionalsService {
 
     @InjectRepository(ProfessionalShift)
     private readonly shiftRepo: Repository<ProfessionalShift>,
+
+    private readonly tenantAccess: TenantAccessService,
   ) {}
+
+  /**
+   * v5.0.0-8.2.2 / 8.4.1: carrega o vínculo e confirma que o solicitante
+   * gerencia o estabelecimento dono dele antes de qualquer alteração.
+   */
+  private async loadManagedLink(id: string, requester: Requester) {
+    const link = await this.findOne(id);
+    await this.tenantAccess.assertManagesBusiness(requester, link.business.id);
+    return link;
+  }
 
   async create(dto: CreateBusinessProfessionalDto, userId: string) {
     const manager = await this.managerRepo.findOne({
@@ -99,6 +117,14 @@ export class BusinessProfessionalsService {
     });
   }
 
+  /** Equipe com contatos, restrita ao gestor do estabelecimento (v5.0.0-8.4.1). */
+  async findTeamForManager(businessId: string, requester: Requester) {
+    await this.tenantAccess.assertManagesBusiness(requester, businessId, {
+      allowAdmin: true,
+    });
+    return this.findAllByBusiness(businessId);
+  }
+
   async findAll() {
     return await this.bpRepo.find({
       relations: ['professional', 'professional.user', 'business'],
@@ -114,14 +140,20 @@ export class BusinessProfessionalsService {
     return link;
   }
 
-  async update(id: string, dto: UpdateBusinessProfessionalDto) {
-    const link = await this.findOne(id);
-    this.bpRepo.merge(link, dto);
+  async update(
+    id: string,
+    dto: UpdateBusinessProfessionalDto,
+    requester: Requester,
+  ) {
+    const link = await this.loadManagedLink(id, requester);
+    // v5.0.0-15.3.3: só o campo `active` é alterável; estabelecimento e
+    // profissional do vínculo nunca são reatribuídos por esta rota.
+    if (dto.active !== undefined) link.active = dto.active;
     return await this.bpRepo.save(link);
   }
 
-  async remove(id: string) {
-    const link = await this.findOne(id);
+  async remove(id: string, requester: Requester) {
+    const link = await this.loadManagedLink(id, requester);
     await this.bpRepo.remove(link);
     return { message: 'Vínculo removido com sucesso.' };
   }
@@ -135,7 +167,28 @@ export class BusinessProfessionalsService {
     });
   }
 
-  async updateProfessionalServices(bpId: string, serviceIds: string[]) {
+  async updateProfessionalServices(
+    bpId: string,
+    serviceIds: string[],
+    requester: Requester,
+  ) {
+    const link = await this.loadManagedLink(bpId, requester);
+
+    // Todos os serviços precisam pertencer ao mesmo estabelecimento do
+    // vínculo; não é possível habilitar serviço de outro tenant.
+    const uniqueIds = Array.from(new Set(serviceIds));
+    if (uniqueIds.length > 0) {
+      const owned = await this.bpRepo.manager.count(Service, {
+        where: { id: In(uniqueIds), business: { id: link.business.id } },
+      });
+      if (owned !== uniqueIds.length) {
+        throw new ForbiddenException(
+          'Um ou mais serviços não pertencem a este estabelecimento.',
+        );
+      }
+    }
+    serviceIds = uniqueIds;
+
     await this.bpsRepo.delete({ businessProfessional: { id: bpId } });
 
     const newLinks = serviceIds.map((serviceId) =>
@@ -159,13 +212,15 @@ export class BusinessProfessionalsService {
   async updateProfessionalShifts(
     bpId: string,
     shifts: { dayOfWeek: number; startTime: string; endTime: string }[],
+    requester: Requester,
   ) {
     const bp = await this.bpRepo.findOne({
       where: { id: bpId },
       relations: ['business'],
     });
 
-    if (!bp) throw new Error('Vínculo não encontrado.');
+    if (!bp) throw new NotFoundException('Vínculo não encontrado.');
+    await this.tenantAccess.assertManagesBusiness(requester, bp.business.id);
     const businessId = bp.business.id;
 
     return await this.bpRepo.manager.transaction(async (em) => {

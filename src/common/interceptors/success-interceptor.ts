@@ -13,7 +13,6 @@ export class SucessInterceptor implements NestInterceptor {
     context: ExecutionContext,
     next: CallHandler<any>,
   ): Observable<any> | Promise<Observable<any>> {
-    console.log('Sua requisição feita com sucesso');
     return next.handle().pipe(
       map((response) => ({
         status: HttpStatus.OK,

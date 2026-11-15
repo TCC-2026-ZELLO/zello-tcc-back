@@ -14,6 +14,7 @@ API RESTful do **Zello**, uma plataforma integrada para descoberta, gestão e ag
 6. [Documentação Interativa OpenAPI (Swagger & Scalar)](#6-documentação-interativa-openapi-swagger--scalar)
 7. [Wiki de Serviços e Endpoints da API](#7-wiki-de-serviços-e-endpoints-da-api)
 8. [Exemplos de Payloads com Dados Reais](#8-exemplos-de-payloads-com-dados-reais)
+9. [Segurança (OWASP ASVS v5.0.0)](#9-segurança-owasp-asvs-v500)
 
 ---
 
@@ -140,7 +141,7 @@ zello-tcc-back/
    | `DB_USER` | **Sim** | `postgres` | Usuário do banco de dados. |
    | `DB_PASS` | **Sim** | `postgres` | Senha do banco de dados. |
    | `DB_NAME` | **Sim** | `zello_db` | Nome do banco de dados. |
-   | `JWT_SECRET` | **Sim** | `chave_secreta_forte_zello_2026` | Segredo para assinatura e validação dos tokens JWT. |
+   | `JWT_SECRET` | **Sim** | 48 bytes aleatórios (`crypto.randomBytes(48)`) | Segredo HS256 dos tokens JWT. Em produção, mínimo de 32 bytes e armazenado como segredo do Container App. |
    | `FRONTEND_BASE_URL` | **Sim** | `http://localhost:5173` | URL base do frontend para links de redirecionamento e recuperação de senha. |
    | `CORS_ALLOWED_ORIGINS` | Não | `http://localhost:5173,http://localhost:3000` | Lista de origens permitidas pelo CORS separadas por vírgula. |
    | `GOOGLE_CLIENT_ID` | Não* | `123456-abc.apps.googleusercontent.com` | Client ID do Google Cloud Console (*necessário para Login Google). |
@@ -156,6 +157,14 @@ zello-tcc-back/
    | `AZURE_SAS_URL` | Não | `https://conta.blob.core.windows.net` | URL do Azure Blob Storage. Se vazio, salva localmente em `./uploads`. |
    | `AZURE_SAS_TOKEN` | Não | `sv=2022-11-02&ss=b...` | Token SAS de escrita no Azure Blob Storage. |
    | `CNPJ_LOOKUP_ENABLED` | Não | `true` | Habilita (`true`) ou desabilita (`false`) a consulta de CNPJ na ReceitaWS. |
+   | `TRUST_PROXY_HOPS` | Não | `0` (dev) / `1` (prod) | Quantidade de proxies confiáveis à frente da API (IP real para rate limit). |
+   | `ACCESS_TOKEN_TTL_MINUTES` | Não | `15` | Validade do token de acesso. |
+   | `SESSION_IDLE_TIMEOUT_MINUTES` | Não | `30` | Inatividade máxima da sessão. |
+   | `SESSION_ABSOLUTE_TIMEOUT_HOURS` | Não | `168` | Vida máxima da sessão. |
+   | `PASSWORD_RESET_TTL_MINUTES` | Não | `10` | Validade do link de redefinição (5 a 10). |
+   | `DB_SSL` / `DB_SYNCHRONIZE` / `DB_MIGRATIONS_RUN` | Não | `false` / `true` / `false` (dev) | Em produção: `true` / `false` / `true`. |
+   | `BOOTSTRAP_ADMIN_EMAIL` | Não | — | E-mail de conta já cadastrada que recebe o papel admin na inicialização. |
+   | `WHATSAPP_ENABLED` | Não | `false` | Liga a integração de lembretes por WhatsApp. |
 
 ---
 
@@ -219,6 +228,8 @@ npm run test:e2e
 ---
 
 ## 6. Documentação Interativa OpenAPI (Swagger & Scalar)
+
+> **Segurança (v5.0.0-13.4.5):** a documentação interativa só é publicada fora de produção. Com `NODE_ENV=production`, as rotas `/docs`, `/api-json` e `/api-json-json` não existem.
 
 Com o backend em execução (`http://localhost:3001`), **todos os serviços do backend estão disponíveis em uma única página interativa**, com sumário (`summary`), descrição detalhada (`description`) e exemplos de payloads reais pré-preenchidos:
 
@@ -499,3 +510,23 @@ Abaixo está o catálogo completo dos **17 módulos** e **87 endpoints** exposto
   ]
 }
 ```
+
+---
+
+## 9. Segurança (OWASP ASVS v5.0.0)
+
+Os controles de segurança seguem o OWASP ASVS v5.0.0 (Level 1 completo e os critérios da proposta do TCC). A documentação fica em [`docs/security`](./docs/security):
+
+| Documento | Conteúdo |
+| :--- | :--- |
+| [`ESPECIFICACAO_DIRETRIZES_SEGURANCA_ZELLO.md`](./docs/security/ESPECIFICACAO_DIRETRIZES_SEGURANCA_ZELLO.md) (e `.docx`) | Decisões de segurança: validação, uploads, autenticação, sessão, RBAC/multitenancy, chaves, dados, dependências e logs. |
+| [`MATRIZ_CONFORMIDADE_ASVS_V5_L1.md`](./docs/security/MATRIZ_CONFORMIDADE_ASVS_V5_L1.md) (e `.docx`) | Status, evidência no código e justificativa de cada requisito. |
+
+Verificações locais:
+
+```bash
+npm run test           # testes unitários, incluindo os de isolamento multitenant
+npm run lint:security  # ESLint com eslint-plugin-security
+npm run audit:prod     # npm audit das dependências de produção (nível alto)
+```
+

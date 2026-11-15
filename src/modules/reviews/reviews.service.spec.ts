@@ -242,6 +242,25 @@ describe('ReviewsService', () => {
       expect(mockMailerService.sendMail).toHaveBeenCalled();
     });
 
+    it('should HTML-encode user content in the notification e-mail (v5.0.0-1.2.1)', async () => {
+      const rev = sampleReview();
+      rev.comment = '<script>alert(1)</script>';
+      mockReviewRepo.findOne.mockResolvedValue(rev);
+      mockReviewRepo.save.mockImplementation(async (r) => r);
+      mockMailerService.sendMail.mockClear();
+
+      await service.respondToReview(
+        'rev-1',
+        { text: '<a href="https://phishing.example">clique</a>' },
+        { id: 'pro-user-1', email: 'p@zello.com', roles: ['professional'] },
+      );
+
+      const html: string = mockMailerService.sendMail.mock.calls[0][0].html;
+      expect(html).not.toContain('<script>');
+      expect(html).not.toContain('<a href');
+      expect(html).toContain('&lt;script&gt;');
+    });
+
     it('should respondToReview, updateReviewResponse, and removeReviewResponse as manager', async () => {
       const rev = sampleReview();
       mockReviewRepo.findOne.mockResolvedValue(rev);

@@ -11,7 +11,12 @@ import {
   Request,
   ForbiddenException,
   UploadedFile,
+  ParseUUIDPipe,
+  BadRequestException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -29,17 +34,38 @@ import { LoggersInterceptor } from '../../common/interceptors/log-interceptor';
 import { SucessInterceptor } from '../../common/interceptors/success-interceptor';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { AnyRole, Roles } from '../../common/decorators/roles.decorator';
+import { uploadOptions } from '../../common/upload/file-validation';
+import { SecurityEventLogger } from '../../common/logging/security-event.logger';
+import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { ExposeContactData } from '../../common/security/sensitive-data.interceptor';
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
 @UseInterceptors(LoggersInterceptor, SucessInterceptor)
+// Cada rota restringe o acesso à própria conta ou ao admin (assertSelfOrAdmin
+// e RolesGuard), então o e-mail pode ser devolvido.
+@ExposeContactData()
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly securityEvents: SecurityEventLogger,
+  ) {}
+
+  /**
+   * Regra de posse (v5.0.0-8.2.2): operações sobre uma conta só são aceitas
+   * quando o alvo é a conta do próprio solicitante ou quando ele é admin.
+   */
+  private assertSelfOrAdmin(req: any, id: string, message: string) {
+    if (req.user.id !== id && !req.user.roles?.includes('admin')) {
+      throw new ForbiddenException(message);
+    }
+  }
 
   @Post()
-  @UseInterceptors(FileInterceptor('photo'))
+  @Throttle({ default: { limit: 10, ttl: 60 * 60_000 } })
+  @UseInterceptors(FileInterceptor('photo', uploadOptions('image')))
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({
     summary: 'Cadastrar novo usuário (Cliente, Profissional ou Estabelecimento)',
@@ -107,7 +133,7 @@ export class UsersController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('manager')
+  @Roles('admin')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Listar todos os usuários cadastrados',
@@ -121,6 +147,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Buscar usuário por ID',
     description:
@@ -133,7 +160,12 @@ export class UsersController {
   })
   @ApiResponse({ status: 200, description: 'Usuário encontrado.' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
-  findOne(@Param('id') id: string) {
+  findOne(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
+    this.assertSelfOrAdmin(
+      req,
+      id,
+      'Você não tem permissão para consultar este usuário.',
+    );
     return this.usersService.findOne(id);
   }
 
@@ -156,17 +188,25 @@ export class UsersController {
     status: 403,
     description: 'Sem permissão para alterar este usuário.',
   })
-  update(
+  async update(
     @Request() req,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
   ) {
-    if (req.user.id !== id && !req.user.roles?.includes('admin')) {
-      throw new ForbiddenException(
-        'Você não tem permissão para alterar este usuário.',
-      );
+    this.assertSelfOrAdmin(
+      req,
+      id,
+      'Você não tem permissão para alterar este usuário.',
+    );
+    const result = await this.usersService.update(id, updateUserDto, {
+      requesterId: req.user.id,
+      requesterIsAdmin: req.user.roles?.includes('admin') ?? false,
+      currentSessionId: req.user.sessionId,
+    });
+    if (updateUserDto.password) {
+      this.securityEvents.log('password_changed', req, { targetUserId: id });
     }
-    return this.usersService.update(id, updateUserDto);
+    return result;
   }
 
   @Delete(':id')
@@ -187,17 +227,42 @@ export class UsersController {
     status: 403,
     description: 'Sem permissão para excluir este usuário.',
   })
-  remove(@Request() req, @Param('id') id: string) {
-    if (req.user.id !== id && !req.user.roles?.includes('admin')) {
-      throw new ForbiddenException(
-        'Você não tem permissão para excluir este usuário.',
-      );
-    }
+  remove(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
+    this.assertSelfOrAdmin(
+      req,
+      id,
+      'Você não tem permissão para excluir este usuário.',
+    );
+    this.securityEvents.log('account_status_changed', req, {
+      targetUserId: id,
+      action: 'soft_delete',
+    });
     return this.usersService.remove(id);
+  }
+
+  @Post('profiles/:type')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Adicionar um perfil à própria conta',
+    description:
+      'Vincula um perfil de cliente, profissional ou gestor à conta do usuário autenticado. O alvo é sempre a própria conta: não há identificador de usuário na rota.',
+  })
+  @ApiParam({ name: 'type', enum: ['client', 'professional', 'manager'] })
+  async appendOwnProfile(@Request() req, @Param('type') type: string) {
+    if (type === 'client') await this.usersService.appendClient(req.user.id);
+    else if (type === 'professional')
+      await this.usersService.appendProfessional(req.user.id);
+    else if (type === 'manager')
+      await this.usersService.appendManager(req.user.id);
+    else throw new BadRequestException('Tipo de perfil inválido.');
+
+    this.securityEvents.log('role_granted', req, { role: type });
+    return this.usersService.findOne(req.user.id);
   }
 
   @Post(':id/append-client')
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @AnyRole()
   @ApiOperation({
     summary: 'Vincular perfil de Cliente a um usuário existente',
     description:
@@ -218,12 +283,21 @@ export class UsersController {
   })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
   @ApiResponse({ status: 400, description: 'ID de usuário inválido.' })
-  async append_client(@Param('id') id: string) {
+  async append_client(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    this.assertSelfOrAdmin(
+      req,
+      id,
+      'Você não tem permissão para alterar os perfis deste usuário.',
+    );
     return this.usersService.appendClient(id);
   }
 
   @Post(':id/append-professional')
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @AnyRole()
   @ApiOperation({
     summary: 'Vincular perfil de Profissional a um usuário existente',
     description:
@@ -244,12 +318,21 @@ export class UsersController {
   })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
   @ApiResponse({ status: 400, description: 'ID de usuário inválido.' })
-  async append_professional(@Param('id') id: string) {
+  async append_professional(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    this.assertSelfOrAdmin(
+      req,
+      id,
+      'Você não tem permissão para alterar os perfis deste usuário.',
+    );
     return this.usersService.appendProfessional(id);
   }
 
   @Post(':id/append-manager')
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @AnyRole()
   @ApiOperation({
     summary: 'Vincular perfil de Gestor (Manager) a um usuário existente',
     description:
@@ -270,11 +353,21 @@ export class UsersController {
   })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
   @ApiResponse({ status: 400, description: 'ID de usuário inválido.' })
-  async append_manager(@Param('id') id: string) {
+  async append_manager(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    this.assertSelfOrAdmin(
+      req,
+      id,
+      'Você não tem permissão para alterar os perfis deste usuário.',
+    );
     return this.usersService.appendManager(id);
   }
 
   @Patch(':id/promote-to-admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @ApiOperation({
     summary: 'Promover usuário a Administrador do sistema',
     description:
@@ -290,7 +383,58 @@ export class UsersController {
     description: 'Usuário promovido a administrador com sucesso.',
   })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
-  async promoteToAdmin(@Param('id') id: string) {
+  async promoteToAdmin(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    this.securityEvents.log('role_granted', req, {
+      targetUserId: id,
+      role: 'admin',
+    });
     return await this.usersService.become_admin(id);
+  }
+
+  @Delete(':id/sessions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Encerrar todas as sessões de um usuário (Apenas Admin)',
+    description:
+      'Revoga imediatamente todas as sessões ativas do usuário informado (v5.0.0-7.4.5). Os tokens de acesso já emitidos deixam de ser aceitos na requisição seguinte.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID do usuário' })
+  async terminateSessions(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.usersService.revokeSessions(id);
+    this.securityEvents.log('sessions_revoked', req, {
+      targetUserId: id,
+      revoked: result.revoked,
+    });
+    return { message: 'Sessões encerradas.', ...result };
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'Ativar ou desativar uma conta (Apenas Admin)',
+    description:
+      'Altera o status da conta. Desativar encerra todas as sessões do usuário na mesma operação (v5.0.0-7.4.2).',
+  })
+  @ApiParam({ name: 'id', description: 'UUID do usuário' })
+  async updateStatus(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserStatusDto,
+  ) {
+    const result = await this.usersService.setActive(id, dto.isActive);
+    this.securityEvents.log('account_status_changed', req, {
+      targetUserId: id,
+      isActive: dto.isActive,
+    });
+    return result;
   }
 }

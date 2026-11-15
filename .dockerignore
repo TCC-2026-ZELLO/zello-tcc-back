@@ -1,8 +1,14 @@
+# v5.0.0-13.4.1: nada de controle de versão, segredos ou artefatos locais na
+# imagem de produção.
 node_modules
 dist
 coverage
+test
+docs
+infra
 .git
 .github
+.gitignore
 .idea
 .vscode
 .env
@@ -10,6 +16,8 @@ coverage
 !.env.example
 .wwebjs_auth
 .wwebjs_cache
-uploads/*
+uploads
+generate-hash.js
+*.md
 *.log
 .DS_Store

@@ -13,7 +13,7 @@ describe('Interceptors', () => {
   });
 
   describe('LoggersInterceptor', () => {
-    it('should log before and after handling the request', async () => {
+    it('should pass the request through without writing to the console', async () => {
       const interceptor = new LoggersInterceptor();
       const next = { handle: () => of('ok') };
 
@@ -21,7 +21,7 @@ describe('Interceptors', () => {
       const result = await lastValueFrom(obs$);
 
       expect(result).toBe('ok');
-      expect(console.log).toHaveBeenCalled();
+      expect(console.log).not.toHaveBeenCalled();
     });
   });
 

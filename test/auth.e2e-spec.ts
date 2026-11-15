@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DataSource } from 'typeorm';
 import {
+  AuthProvider,
   User,
 } from '../src/modules/users/entities/user.entity';
 import * as bcrypt from 'bcrypt';
@@ -27,7 +28,7 @@ describe('Autenticação (E2E)', () => {
     dataSource = moduleFixture.get<DataSource>(DataSource);
 
     // SEED: Garante que o utilizador de teste existe na base de dados
-    const userRepo = dataSource.getRepository(Usuario);
+    const userRepo = dataSource.getRepository(User);
     const emailTeste = 'rafael@exemplo.com';
     const existingUser = await userRepo.findOne({
       where: { email: emailTeste },
@@ -37,7 +38,7 @@ describe('Autenticação (E2E)', () => {
       const passwordHash = await bcrypt.hash('SenhaForte@2026', 10);
       await userRepo.save(
         userRepo.create({
-          nome: 'Rafael Teste',
+          name: 'Rafael Teste',
           email: emailTeste,
           passwordHash,
           provider: AuthProvider.LOCAL,
