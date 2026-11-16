@@ -25,9 +25,23 @@ jest.mock('qrcode-terminal', () => ({
 describe('WhatsappService', () => {
   let service: WhatsappService;
 
+  const originalEnabled = process.env.WHATSAPP_ENABLED;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.WHATSAPP_ENABLED = 'true';
     service = new WhatsappService();
+  });
+
+  afterAll(() => {
+    process.env.WHATSAPP_ENABLED = originalEnabled;
+  });
+
+  it('should stay disabled unless WHATSAPP_ENABLED=true (v5.0.0-15.2.5)', async () => {
+    process.env.WHATSAPP_ENABLED = 'false';
+    service.onModuleInit();
+    expect(mockInitialize).not.toHaveBeenCalled();
+    expect(await service.sendMessage('41999999999', 'Olá')).toBe(false);
   });
 
   it('should initialize client and handle events onModuleInit', () => {

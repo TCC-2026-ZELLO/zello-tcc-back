@@ -8,6 +8,7 @@ describe('CatalogService', () => {
   let managerRepo: any;
   let bpRepo: any;
   let professionalsService: any;
+  let tenantAccess: any;
 
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -32,12 +33,21 @@ describe('CatalogService', () => {
       revalidateVisibility: jest.fn().mockResolvedValue(undefined),
     };
 
+    tenantAccess = {
+      isAdmin: jest.fn().mockReturnValue(false),
+      managesBusiness: jest.fn().mockResolvedValue(true),
+      assertManagesBusiness: jest.fn().mockResolvedValue(undefined),
+      managesProfessional: jest.fn().mockResolvedValue(true),
+      isProfessionalOfLink: jest.fn().mockResolvedValue(false),
+    } as any;
+
     service = new CatalogService(
       serviceRepo,
       bmRepo,
       managerRepo,
       bpRepo,
       professionalsService,
+      tenantAccess,
     );
   });
 
@@ -59,9 +69,14 @@ describe('CatalogService', () => {
     expect(created.id).toBe('s1');
 
     await service.findAllByBusiness('b1');
-    await service.update('s1', { name: 'Corte Novo' } as any);
+    const manager = { id: 'u1', roles: ['manager'] };
+    await service.update('s1', { name: 'Corte Novo' } as any, manager);
+    expect(tenantAccess.assertManagesBusiness).toHaveBeenCalledWith(
+      manager,
+      'b1',
+    );
 
-    const removed = await service.remove('s1');
+    const removed = await service.remove('s1', manager);
     expect(professionalsService.revalidateVisibility).toHaveBeenCalledWith(
       'p1',
     );

@@ -94,7 +94,7 @@ describe('AppointmentsController', () => {
       message: 'Cancelamento efetuado com sucesso.',
       data: { id: 'a1' },
     });
-    expect(await controller.getClientReputation('c1')).toEqual({
+    expect(await controller.getClientReputation(req, 'c1')).toEqual({
       noShowCount: 0,
       successStreak: 1,
     });

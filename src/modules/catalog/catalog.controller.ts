@@ -118,10 +118,11 @@ export class CatalogController {
     description: 'Serviço atualizado com sucesso.',
   })
   update(
+    @Request() req,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateServiceDto: UpdateServiceDto,
   ) {
-    return this.catalogService.update(id, updateServiceDto);
+    return this.catalogService.update(id, updateServiceDto, req.user);
   }
 
   @Delete(':id')
@@ -141,7 +142,7 @@ export class CatalogController {
     status: 200,
     description: 'Serviço removido do catálogo com sucesso.',
   })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.catalogService.remove(id);
+  remove(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
+    return this.catalogService.remove(id, req.user);
   }
 }

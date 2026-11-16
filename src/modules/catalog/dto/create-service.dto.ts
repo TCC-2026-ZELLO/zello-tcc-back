@@ -4,6 +4,8 @@ import {
   IsNumber,
   IsOptional,
   IsUUID,
+  Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -15,6 +17,7 @@ export class CreateServiceDto {
     example: 'Corte Masculino + Barba Terapia',
   })
   @IsString()
+  @MaxLength(120)
   name: string;
 
   @ApiPropertyOptional({
@@ -24,6 +27,7 @@ export class CreateServiceDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   description?: string;
 
   @ApiProperty({
@@ -33,6 +37,7 @@ export class CreateServiceDto {
   })
   @IsInt()
   @Min(1)
+  @Max(720)
   durationMinutes: number;
 
   @ApiProperty({
@@ -43,6 +48,7 @@ export class CreateServiceDto {
   })
   @IsInt()
   @Min(0)
+  @Max(240)
   cleanupMinutes: number;
 
   @ApiProperty({
@@ -50,6 +56,9 @@ export class CreateServiceDto {
     example: 95.0,
   })
   @Type(() => Number)
-  @IsNumber()
+  // v5.0.0-2.2.1: valor em reais, não negativo, com no máximo 2 casas.
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100000)
   price: number;
 }

@@ -12,6 +12,8 @@ describe('BusinessManagersController', () => {
       findAll: jest.fn().mockResolvedValue([]),
       findByBusiness: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue({ id: 'bm1' }),
+      findOneFor: jest.fn().mockResolvedValue({ id: 'bm1' }),
+      findByBusinessFor: jest.fn().mockResolvedValue([]),
       remove: jest.fn().mockResolvedValue({ message: 'ok' }),
     };
 
@@ -31,8 +33,8 @@ describe('BusinessManagersController', () => {
       await controller.create(req, { managerId: 'm1', businessId: 'b1' }),
     ).toEqual({ id: 'bm1' });
     expect(await controller.findAll()).toEqual([]);
-    expect(await controller.findByBusiness('b1')).toEqual([]);
-    expect(await controller.findOne('bm1')).toEqual({ id: 'bm1' });
+    expect(await controller.findByBusiness(req, 'b1')).toEqual([]);
+    expect(await controller.findOne(req, 'bm1')).toEqual({ id: 'bm1' });
     expect(await controller.remove(req, 'bm1')).toEqual({ message: 'ok' });
   });
 });

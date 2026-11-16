@@ -26,6 +26,7 @@ import { Manager } from '../profiles/managers/entities/manager.entity';
 import { Professional } from '../profiles/professionals/entities/professional.entity';
 import { Business } from '../businesses/entities/business.entity';
 import { BusinessProfessional } from '../business-professionals/entities/business-professional.entity';
+import { TenantAccessService } from '../../common/security/tenant-access.service';
 
 @Injectable()
 export class AvailabilityService {
@@ -47,6 +48,7 @@ export class AvailabilityService {
 
     private readonly catalogService: CatalogService,
     private readonly appointmentsService: AppointmentsService,
+    private readonly tenantAccess: TenantAccessService,
   ) {}
 
   async getOperatingHours(businessId: string) {
@@ -105,7 +107,7 @@ export class AvailabilityService {
     return savedHour;
   }
 
-  async createShift(dto: CreateProfessionalShiftDto) {
+  async createShift(dto: CreateProfessionalShiftDto, requester: ActiveUser) {
     const { businessProfessionalId } = dto;
 
     const bp = await this.shiftRepo.manager.findOne(BusinessProfessional, {
@@ -115,6 +117,21 @@ export class AvailabilityService {
 
     if (!bp) {
       throw new BadRequestException('Vínculo de profissional não encontrado.');
+    }
+
+    // v5.0.0-8.2.2 / 8.4.1: só cria turno quem gerencia o estabelecimento do
+    // vínculo, o próprio profissional do vínculo ou um administrador.
+    const allowed =
+      this.tenantAccess.isAdmin(requester) ||
+      (await this.tenantAccess.managesBusiness(requester.id, bp.business.id)) ||
+      (await this.tenantAccess.isProfessionalOfLink(
+        requester.id,
+        businessProfessionalId,
+      ));
+    if (!allowed) {
+      throw new ForbiddenException(
+        'Você não tem permissão para alterar a agenda deste profissional.',
+      );
     }
 
     const businessHour = await this.operatingHourRepo.findOne({
@@ -189,8 +206,43 @@ export class AvailabilityService {
           'Acesso negado: profissionais só podem bloquear sua própria agenda.',
         );
       }
-    } else if (requester.roles.includes('manager') && businessId) {
-      await this.validateManagerAuthority(requester.id, businessId);
+    } else if (!requester.roles.includes('admin')) {
+      // Gestor: precisa gerenciar o estabelecimento informado e, quando o
+      // bloqueio é de um profissional, esse profissional precisa pertencer a
+      // um estabelecimento que ele gerencia (v5.0.0-8.4.1).
+      if (!businessId && !professionalId) {
+        throw new BadRequestException(
+          'Informe o estabelecimento ou o profissional do bloqueio.',
+        );
+      }
+      // A decisão é calculada por completo antes de qualquer ação: cada alvo
+      // informado precisa ser autorizado, e a ausência de um alvo nunca
+      // dispensa a verificação do outro (v5.0.0-8.2.2).
+      const businessAllowed =
+        businessId === undefined || businessId === null || businessId === ''
+          ? true
+          : await this.tenantAccess.managesBusiness(requester.id, businessId);
+      let professionalAllowed = true;
+      if (
+        professionalId !== undefined &&
+        professionalId !== null &&
+        professionalId !== ''
+      ) {
+        const own = await this.profRepo.findOne({
+          where: { user: { id: requester.id } },
+        });
+        professionalAllowed =
+          (!!own && own.id === professionalId) ||
+          (await this.tenantAccess.managesProfessional(
+            requester.id,
+            professionalId,
+          ));
+      }
+      if (!businessAllowed || !professionalAllowed) {
+        throw new ForbiddenException(
+          'Acesso negado: o bloqueio precisa ser de um estabelecimento ou profissional que você gerencia.',
+        );
+      }
     }
 
     const seriesId = targetDates.length > 1 ? crypto.randomUUID() : undefined;
@@ -309,8 +361,29 @@ export class AvailabilityService {
       if (!prof || prof.id !== exception.professional?.id) {
         throw new ForbiddenException('Acesso negado.');
       }
-    } else if (requester.roles.includes('manager') && exception.business) {
-      await this.validateManagerAuthority(requester.id, exception.business.id);
+    } else if (!requester.roles.includes('admin')) {
+      if (exception.business) {
+        await this.validateManagerAuthority(
+          requester.id,
+          exception.business.id,
+        );
+      } else if (exception.professional) {
+        const own = await this.profRepo.findOne({
+          where: { user: { id: requester.id } },
+        });
+        const isSelf = !!own && own.id === exception.professional.id;
+        if (
+          !isSelf &&
+          !(await this.tenantAccess.managesProfessional(
+            requester.id,
+            exception.professional.id,
+          ))
+        ) {
+          throw new ForbiddenException('Acesso negado.');
+        }
+      } else {
+        throw new ForbiddenException('Acesso negado.');
+      }
     }
 
     await this.exceptionRepo.remove(exception);

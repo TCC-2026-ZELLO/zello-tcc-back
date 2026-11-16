@@ -8,6 +8,7 @@ import {
   Req,
   Param,
   Delete,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -22,7 +23,7 @@ import { AvailabilityService } from './availability.service';
 import { CreateBusinessOperatingHourDto } from './dto/create-business-operating-hour.dto';
 import { CreateProfessionalShiftDto } from './dto/create-professional-shift.dto';
 import { CreateScheduleExceptionDto } from './dto/create-schedule-exception.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { AnyRole, Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
@@ -35,6 +36,7 @@ export class AvailabilityController {
   constructor(private readonly availabilityService: AvailabilityService) {}
 
   @Get('operating-hours')
+  @AnyRole()
   @ApiOperation({
     summary: 'Consultar horários de funcionamento semanal do estabelecimento',
     description:
@@ -50,7 +52,9 @@ export class AvailabilityController {
     status: 200,
     description: 'Grade de horários de funcionamento retornada com sucesso.',
   })
-  getOperatingHours(@Query('businessId') businessId: string) {
+  getOperatingHours(
+    @Query('businessId', ParseUUIDPipe) businessId: string,
+  ) {
     return this.availabilityService.getOperatingHours(businessId);
   }
 
@@ -85,8 +89,11 @@ export class AvailabilityController {
     status: 201,
     description: 'Turno de trabalho criado com sucesso.',
   })
-  createShift(@Body() dto: CreateProfessionalShiftDto) {
-    return this.availabilityService.createShift(dto);
+  createShift(
+    @Req() req: { user: ActiveUser },
+    @Body() dto: CreateProfessionalShiftDto,
+  ) {
+    return this.availabilityService.createShift(dto, req.user);
   }
 
   @Post('exceptions')
@@ -138,8 +145,10 @@ export class AvailabilityController {
     description: 'Lista de exceções de agenda retornada com sucesso.',
   })
   getExceptions(
-    @Query('professionalId') professionalId?: string,
-    @Query('businessId') businessId?: string,
+    @Query('professionalId', new ParseUUIDPipe({ optional: true }))
+    professionalId?: string,
+    @Query('businessId', new ParseUUIDPipe({ optional: true }))
+    businessId?: string,
     @Query('date') date?: string,
   ) {
     return this.availabilityService.getExceptions(
@@ -165,11 +174,15 @@ export class AvailabilityController {
     status: 200,
     description: 'Exceção removida com sucesso.',
   })
-  deleteException(@Req() req: { user: ActiveUser }, @Param('id') id: string) {
+  deleteException(
+    @Req() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.availabilityService.deleteException(id, req.user);
   }
 
   @Get('bounds')
+  @AnyRole()
   @ApiOperation({
     summary: 'Calcular horários disponíveis para agendamento de um serviço',
     description:
@@ -205,9 +218,10 @@ export class AvailabilityController {
   })
   getAvailableBounds(
     @Query('date') date: string,
-    @Query('businessId') businessId: string,
-    @Query('serviceId') serviceId: string,
-    @Query('professionalId') professionalId?: string,
+    @Query('businessId', ParseUUIDPipe) businessId: string,
+    @Query('serviceId', ParseUUIDPipe) serviceId: string,
+    @Query('professionalId', new ParseUUIDPipe({ optional: true }))
+    professionalId?: string,
   ) {
     return this.availabilityService.getAvailableBounds(
       date,
@@ -234,7 +248,10 @@ export class AvailabilityController {
     status: 200,
     description: 'Turnos do profissional retornados com sucesso.',
   })
-  getShifts(@Query('businessProfessionalId') businessProfessionalId: string) {
+  getShifts(
+    @Query('businessProfessionalId', ParseUUIDPipe)
+    businessProfessionalId: string,
+  ) {
     return this.availabilityService.getShiftsByBusinessProfessional(
       businessProfessionalId,
     );

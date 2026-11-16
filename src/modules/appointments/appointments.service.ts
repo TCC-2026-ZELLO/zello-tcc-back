@@ -40,6 +40,7 @@ import { BusinessManager } from '../business-managers/entities/business-manager.
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { Client } from '../profiles/clients/entities/client.entity';
 import { User } from '../users/entities/user.entity';
+import { Professional } from '../profiles/professionals/entities/professional.entity';
 
 export interface AppointmentSlot {
   date: string;
@@ -58,6 +59,14 @@ const RESCHEDULE_RELATIONS = [
 const BUSINESS_UTC_OFFSET = '-03:00';
 const CANCEL_GRACE_PERIOD_MS = 15 * 60 * 1000;
 const CANCEL_MIN_NOTICE_MS = 2 * 60 * 60 * 1000;
+
+/** Transições permitidas na rota de atualização de status pelo gestor. */
+const STATUS_TRANSITIONS: Partial<
+  Record<AppointmentStatus, AppointmentStatus[]>
+> = {
+  PENDING: ['CONFIRMED'],
+  CONFIRMED: ['COMPLETED'],
+};
 
 @Injectable()
 export class AppointmentsService {
@@ -767,7 +776,28 @@ export class AppointmentsService {
 
   async getClientReputation(
     id: string,
+    requester?: { id: string; roles?: string[] },
   ): Promise<{ noShowCount: number; successStreak: number }> {
+    // v5.0.0-8.2.2: a reputação de um cliente só é visível para o próprio
+    // cliente e para quem presta o atendimento (gestor, profissional) ou admin.
+    if (requester) {
+      const roles = requester.roles ?? [];
+      const staff =
+        roles.includes('manager') ||
+        roles.includes('professional') ||
+        roles.includes('admin');
+      if (!staff) {
+        const own = await this.clientRepo.findOne({
+          where: { user: { id: requester.id } },
+        });
+        if (requester.id !== id && own?.id !== id) {
+          throw new ForbiddenException(
+            'Você não tem permissão para consultar a reputação deste cliente.',
+          );
+        }
+      }
+    }
+
     const client = await this.clientRepo.findOne({
       where: [{ id }, { user: { id } }],
     });
@@ -859,9 +889,25 @@ export class AppointmentsService {
   ): Promise<Appointment[]> {
     const where: FindOptionsWhere<Appointment> = {};
 
+    // v5.0.0-8.2.2 / 8.4.1: a listagem sempre tem escopo. Com `businessId`, o
+    // solicitante precisa gerenciar o estabelecimento. Sem ele, só o próprio
+    // profissional pode consultar a sua agenda. Não existe listagem global.
     if (params.businessId) {
       await this.validateManagerAuthority(userId, params.businessId);
       where.business = { id: params.businessId };
+    } else {
+      const ownProfile = await this.dataSource
+        .getRepository(Professional)
+        .findOne({ where: { user: { id: userId } } });
+      if (
+        !ownProfile ||
+        (params.professionalId && params.professionalId !== ownProfile.id)
+      ) {
+        throw new ForbiddenException(
+          'Informe o estabelecimento que você gerencia para listar agendamentos.',
+        );
+      }
+      params = { ...params, professionalId: ownProfile.id };
     }
 
     if (params.date) {
@@ -900,6 +946,15 @@ export class AppointmentsService {
     }
 
     await this.validateManagerAuthority(userId, appointment.business.id);
+
+    // v5.0.0-2.3.1: o fluxo do atendimento só avança na ordem prevista
+    // (PENDING -> CONFIRMED -> COMPLETED). Não é possível pular etapas nem
+    // reabrir um agendamento cancelado, concluído ou marcado como no-show.
+    if (!STATUS_TRANSITIONS[appointment.status]?.includes(status)) {
+      throw new UnprocessableEntityException(
+        `Transição de status não permitida: ${appointment.status} -> ${status}.`,
+      );
+    }
 
     if (status === 'CONFIRMED') {
       appointment.confirmedAt = new Date();

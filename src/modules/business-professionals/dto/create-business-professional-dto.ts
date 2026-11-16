@@ -3,7 +3,8 @@ import {
   IsEmail,
   IsNotEmpty,
   IsOptional,
-  IsString,
+  IsUUID,
+  MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -12,8 +13,7 @@ export class CreateBusinessProfessionalDto {
     description: 'UUID do estabelecimento que está contratando/vinculando',
     example: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
   })
-  //@IsUUID()
-  @IsString()
+  @IsUUID()
   @IsNotEmpty()
   businessId: string;
 
@@ -23,6 +23,7 @@ export class CreateBusinessProfessionalDto {
   })
   @IsEmail()
   @IsNotEmpty()
+  @MaxLength(254)
   email: string;
 
   @ApiPropertyOptional({

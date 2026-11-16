@@ -24,12 +24,13 @@ describe('CatalogController', () => {
   });
 
   it('should be defined and delegate all endpoints', async () => {
+    const req = { user: { id: 'u1', roles: ['manager'] } };
     expect(
       await controller.create({ user: { id: 'u1' } }, 'b1', {} as any),
     ).toEqual({ id: 's1' });
     expect(await controller.findAllByBusiness('b1')).toEqual([]);
     expect(await controller.findOne('s1')).toEqual({ id: 's1' });
-    expect(await controller.update('s1', {} as any)).toEqual({ id: 's1' });
-    expect(await controller.remove('s1')).toEqual({ message: 'ok' });
+    expect(await controller.update(req, 's1', {} as any)).toEqual({ id: 's1' });
+    expect(await controller.remove(req, 's1')).toEqual({ message: 'ok' });
   });
 });

@@ -29,6 +29,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { uploadOptions } from '../../common/upload/file-validation';
+import { AnyRole } from '../../common/decorators/roles.decorator';
 import { FilesService } from '../files/files.service';
 
 @ApiTags('businesses')
@@ -68,7 +70,7 @@ export class BusinessesController {
 
   @Post(':id/photo')
   @Roles('manager', 'admin')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadOptions('image')))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Atualizar foto de perfil (logo) do estabelecimento',
@@ -111,7 +113,7 @@ export class BusinessesController {
 
   @Post(':id/banner')
   @Roles('manager', 'admin')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadOptions('image')))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Atualizar imagem de capa (banner) do estabelecimento',
@@ -154,7 +156,7 @@ export class BusinessesController {
 
   @Post(':id/gallery')
   @Roles('manager', 'admin')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', uploadOptions('image')))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Adicionar foto à galeria do estabelecimento',
@@ -240,6 +242,7 @@ export class BusinessesController {
   }
 
   @Get(':id')
+  @AnyRole()
   @ApiOperation({
     summary: 'Consultar detalhes de um estabelecimento por ID',
     description:
@@ -259,6 +262,7 @@ export class BusinessesController {
   }
 
   @Get(':id/gallery')
+  @AnyRole()
   @ApiOperation({
     summary: 'Listar fotos da galeria de um estabelecimento',
     description:
