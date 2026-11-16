@@ -6,6 +6,7 @@ import {
   Param,
   Delete,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -22,8 +23,10 @@ import { Roles } from '../../../common/decorators/roles.decorator';
 @ApiTags('managers')
 @ApiBearerAuth()
 @Controller('managers')
+// v5.0.0-8.2.1 / 8.4.1: rotas administrativas. Um gestor não pode listar nem
+// remover perfis de gestores de outros estabelecimentos.
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('manager', 'admin')
+@Roles('admin')
 export class ManagersController {
   constructor(private readonly managersService: ManagersService) {}
 
@@ -70,7 +73,7 @@ export class ManagersController {
     status: 200,
     description: 'Perfil de gestor encontrado.',
   })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.managersService.findOne(id);
   }
 
@@ -89,7 +92,7 @@ export class ManagersController {
     status: 200,
     description: 'Perfil de gestor atualizado com sucesso.',
   })
-  update(@Param('id') id: string) {
+  update(@Param('id', ParseUUIDPipe) id: string) {
     return this.managersService.update(id);
   }
 
@@ -108,7 +111,7 @@ export class ManagersController {
     status: 200,
     description: 'Perfil de gestor removido com sucesso.',
   })
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.managersService.remove(id);
   }
 }

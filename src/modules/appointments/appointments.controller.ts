@@ -100,8 +100,10 @@ export class AppointmentsController {
     @Query('date') date?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
-    @Query('businessId') businessId?: string,
-    @Query('professionalId') professionalId?: string,
+    @Query('businessId', new ParseUUIDPipe({ optional: true }))
+    businessId?: string,
+    @Query('professionalId', new ParseUUIDPipe({ optional: true }))
+    professionalId?: string,
   ) {
     return this.appointmentsService.findAll(req.user.id, {
       date,
@@ -448,8 +450,12 @@ export class AppointmentsController {
     },
   })
   async getClientReputation(
+    @Request() req: { user: ActiveUser },
     @Param('clientId', ParseUUIDPipe) clientId: string,
   ) {
-    return await this.appointmentsService.getClientReputation(clientId);
+    return await this.appointmentsService.getClientReputation(
+      clientId,
+      req.user,
+    );
   }
 }

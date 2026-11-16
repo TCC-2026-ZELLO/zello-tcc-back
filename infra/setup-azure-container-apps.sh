@@ -76,30 +76,50 @@ else
     --target-port 3001
 fi
 
+# v5.0.0-4.1.3: o cliente chega à API por 3 proxies (ingress do frontend,
+# nginx e ingress do backend), por isso TRUST_PROXY_HOPS=3.
+# v5.0.0-13.3.1: credenciais ficam no cofre de segredos do Container App e
+# chegam ao contêiner por referência (secretref:). Elas não aparecem como
+# variáveis de ambiente em texto puro no portal nem nos logs de implantação.
+az containerapp secret set \
+  --name "$BACK_APP_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --secrets \
+    db-pass="$DB_PASS" \
+    jwt-secret="$JWT_SECRET" \
+    google-client-secret="$GOOGLE_CLIENT_SECRET" \
+    mail-pass="$MAIL_PASS" \
+    azure-sas-token="$AZURE_SAS_TOKEN" \
+  --output none
+
 az containerapp update \
   --name "$BACK_APP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
   --set-env-vars \
     PORT=3001 \
     NODE_ENV=production \
+    TRUST_PROXY_HOPS="${TRUST_PROXY_HOPS:-3}" \
     DB_HOST="$DB_HOST" \
     DB_PORT="$DB_PORT" \
     DB_USER="$DB_USER" \
-    DB_PASS="$DB_PASS" \
+    DB_PASS=secretref:db-pass \
     DB_NAME="$DB_NAME" \
     DB_SSL=true \
-    JWT_SECRET="$JWT_SECRET" \
+    DB_SYNCHRONIZE=false \
+    DB_MIGRATIONS_RUN=true \
+    JWT_SECRET=secretref:jwt-secret \
     GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-    GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
+    GOOGLE_CLIENT_SECRET=secretref:google-client-secret \
     MAIL_HOST="$MAIL_HOST" \
     MAIL_PORT="$MAIL_PORT" \
     MAIL_USER="$MAIL_USER" \
-    MAIL_PASS="$MAIL_PASS" \
+    MAIL_PASS=secretref:mail-pass \
     MAIL_SECURE="$MAIL_SECURE" \
     MAIL_FROM="$MAIL_FROM" \
     AZURE_SAS_URL="$AZURE_SAS_URL" \
-    AZURE_SAS_TOKEN="$AZURE_SAS_TOKEN" \
+    AZURE_SAS_TOKEN=secretref:azure-sas-token \
     CNPJ_LOOKUP_ENABLED="${CNPJ_LOOKUP_ENABLED:-true}" \
+    WHATSAPP_ENABLED=false \
   --output none
 
 BACK_FQDN=$(az containerapp show \
@@ -133,14 +153,21 @@ FRONT_FQDN=$(az containerapp show \
   --output tsv)
 FRONT_URL="https://${FRONT_FQDN}"
 
+# O frontend encaminha /api para o backend (mesmo site: cookies SameSite=Strict).
+az containerapp update \
+  --name "$FRONT_APP_NAME" \
+  --resource-group "$RESOURCE_GROUP" \
+  --set-env-vars API_UPSTREAM="$BACK_URL" \
+  --output none
+
 echo "==> 7. Atualizando URLs de CORS e Callback OAuth no Backend ($BACK_APP_NAME)..."
 az containerapp update \
   --name "$BACK_APP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
   --set-env-vars \
     FRONTEND_BASE_URL="$FRONT_URL" \
-    CORS_ALLOWED_ORIGINS="${FRONT_URL},http://localhost:3000,http://localhost:5173" \
-    GOOGLE_CALLBACK_URL="${BACK_URL}/auth/google/callback" \
+    CORS_ALLOWED_ORIGINS="${FRONT_URL}" \
+    GOOGLE_CALLBACK_URL="${FRONT_URL}/api/auth/google/callback" \
     GOOGLE_REDIRECT_URL="${FRONT_URL}/explore" \
   --output none
 
@@ -153,7 +180,7 @@ echo "Banco conectado:                ${DB_HOST} (${DB_NAME})"
 echo "Bucket conectado:               ${AZURE_SAS_URL}"
 echo "URL do Backend (VITE_API_URL):  ${BACK_URL}"
 echo "URL do Frontend:                ${FRONT_URL}"
-echo "Swagger / Scalar Docs:          ${BACK_URL}/docs"
+echo "Documentação da API:            desativada em produção (v5.0.0-13.4.5)"
 echo "=============================================================================="
 echo ""
 echo "==> 8. Criando Managed Identity + OIDC para o GitHub Actions (compatível com conta estudante PUCPR)..."

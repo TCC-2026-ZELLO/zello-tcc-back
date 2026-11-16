@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -19,11 +20,16 @@ import {
 import { ClientsService } from './clients.service';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
 
 @ApiTags('clients')
 @ApiBearerAuth()
 @Controller('clients')
-@UseGuards(JwtAuthGuard)
+// v5.0.0-8.2.1: rotas administrativas. Perfis de cliente carregam dados
+// pessoais e indicadores de reputação; só o papel admin lista, altera ou remove.
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
 
@@ -70,7 +76,7 @@ export class ClientsController {
     status: 200,
     description: 'Perfil de cliente retornado com sucesso.',
   })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.clientsService.findOne(id);
   }
 
@@ -90,7 +96,7 @@ export class ClientsController {
     status: 200,
     description: 'Perfil de cliente atualizado com sucesso.',
   })
-  update(@Param('id') id: string, @Body() updateClientDto: UpdateClientDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() updateClientDto: UpdateClientDto) {
     return this.clientsService.update(id, updateClientDto);
   }
 
@@ -109,7 +115,7 @@ export class ClientsController {
     status: 200,
     description: 'Perfil de cliente removido com sucesso.',
   })
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.clientsService.remove(id);
   }
 }

@@ -14,6 +14,8 @@ describe('BusinessProfessionalsService', () => {
   let managerRepo: any;
   let shiftRepo: any;
   let txEm: any;
+  let tenantAccess: any;
+  const manager = { id: 'u1', email: 'a@b.com', roles: ['manager'] };
 
   beforeEach(() => {
     txEm = {
@@ -48,6 +50,14 @@ describe('BusinessProfessionalsService', () => {
     managerRepo = { findOne: jest.fn() };
     shiftRepo = { find: jest.fn().mockResolvedValue([]) };
 
+    tenantAccess = {
+      isAdmin: jest.fn().mockReturnValue(false),
+      managesBusiness: jest.fn().mockResolvedValue(true),
+      assertManagesBusiness: jest.fn().mockResolvedValue(undefined),
+      managesProfessional: jest.fn().mockResolvedValue(true),
+      isProfessionalOfLink: jest.fn().mockResolvedValue(false),
+    } as any;
+
     service = new BusinessProfessionalsService(
       bpRepo,
       bpsRepo,
@@ -55,6 +65,7 @@ describe('BusinessProfessionalsService', () => {
       professionalRepo,
       managerRepo,
       shiftRepo,
+      tenantAccess,
     );
   });
 
@@ -99,26 +110,50 @@ describe('BusinessProfessionalsService', () => {
     await service.findAllByBusiness('b1');
     await service.findAll();
     await service.findOne('bp1');
-    await service.update('bp1', { active: false });
-    await service.remove('bp1');
+    await service.update('bp1', { active: false }, manager);
+    await service.remove('bp1', manager);
+    expect(tenantAccess.assertManagesBusiness).toHaveBeenCalledWith(
+      manager,
+      'b1',
+    );
     await service.findProfessionalServices('bp1');
-    const savedServices = await service.updateProfessionalServices('bp1', [
-      's1',
-      's2',
-    ]);
+    bpRepo.manager.count = jest.fn().mockResolvedValue(2);
+    const savedServices = await service.updateProfessionalServices(
+      'bp1',
+      ['s1', 's2'],
+      manager,
+    );
     expect(savedServices).toHaveLength(2);
 
+    // Serviço de outro estabelecimento não pode ser habilitado (v5.0.0-8.4.1).
+    bpRepo.manager.count = jest.fn().mockResolvedValue(1);
+    await expect(
+      service.updateProfessionalServices('bp1', ['s1', 'alheio'], manager),
+    ).rejects.toThrow(ForbiddenException);
+
+    // Gestor de outro estabelecimento é barrado antes de qualquer alteração.
+    tenantAccess.assertManagesBusiness.mockRejectedValueOnce(
+      new ForbiddenException(),
+    );
+    await expect(service.remove('bp1', manager)).rejects.toThrow(
+      ForbiddenException,
+    );
+
     await service.findProfessionalShifts('bp1');
-    const savedShifts = await service.updateProfessionalShifts('bp1', [
-      { dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
-      { dayOfWeek: 2, startTime: '09:00', endTime: '17:00' },
-    ]);
+    const savedShifts = await service.updateProfessionalShifts(
+      'bp1',
+      [
+        { dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
+        { dayOfWeek: 2, startTime: '09:00', endTime: '17:00' },
+      ],
+      manager,
+    );
     expect(savedShifts).toHaveLength(1);
 
     bpRepo.findOne.mockResolvedValue(null);
     await expect(service.findOne('missing')).rejects.toThrow(NotFoundException);
     await expect(
-      service.updateProfessionalShifts('missing', []),
+      service.updateProfessionalShifts('missing', [], manager),
     ).rejects.toThrow('Vínculo não encontrado.');
   });
 });

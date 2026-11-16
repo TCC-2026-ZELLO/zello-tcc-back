@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -29,19 +29,44 @@ import { ViaCepService } from './common/services/viacep.service';
 import { CnpjLookupService } from './common/services/cnpj-lookup.service';
 import { CombosModule } from './modules/combos/combos.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { SecurityModule } from './common/security/security.module';
+import { OriginCheckMiddleware } from './common/security/origin-check.middleware';
+import { SensitiveDataInterceptor } from './common/security/sensitive-data.interceptor';
+import { AuditLogInterceptor } from './common/logging/audit-log.interceptor';
+import { validateEnv } from './config/env.validation';
+import { rateLimitConfig } from './config/security.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // v5.0.0-13.3.1: a aplicação não sobe com segredo ausente ou fraco.
+      validate: validateEnv,
     }),
     ScheduleModule.forRoot(),
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
+      useFactory: (configService: ConfigService) => {
+        const isProd = configService.get<string>('NODE_ENV') === 'production';
+        const sslEnabled = configService.get<string>('DB_SSL') === 'true';
+        const sslCa = configService.get<string>('DB_SSL_CA');
+        // A validação do certificado do banco fica sempre ligada em produção.
+        const rejectUnauthorized =
+          isProd ||
+          configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED') !== 'false';
+        // O schema nunca é alterado automaticamente em produção: as mudanças
+        // entram por migrations versionadas (src/migrations).
+        const synchronize =
+          !isProd && configService.get<string>('DB_SYNCHRONIZE') !== 'false';
+        const migrationsRun =
+          configService.get<string>('DB_MIGRATIONS_RUN') !== undefined
+            ? configService.get<string>('DB_MIGRATIONS_RUN') === 'true'
+            : isProd;
+
+        return {
+        type: 'postgres' as const,
         host: configService.get<string>('DB_HOST'),
         port: configService.get<number>('DB_PORT'),
         username: configService.get<string>('DB_USER'),
@@ -49,21 +74,27 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
         database: configService.get<string>('DB_NAME'),
 
         autoLoadEntities: true,
-        synchronize: true, // desativar quando em produção
-        dropSchema: false, // ativar quando mudanças nas entidades quebrar migração
-        ssl:
-          configService.get<string>('DB_SSL') === 'true'
-            ? { rejectUnauthorized: false }
-            : false,
-      }),
+        synchronize,
+        dropSchema: false,
+        migrations: [__dirname + '/migrations/*{.ts,.js}'],
+        migrationsRun,
+        ssl: sslEnabled
+          ? { rejectUnauthorized, ...(sslCa ? { ca: sslCa } : {}) }
+          : false,
+        };
+      },
     }),
 
+    // v5.0.0-6.3.1 / 2.4.1: limite global por IP. As rotas de autenticação
+    // têm limites próprios, mais baixos, declarados com @Throttle.
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
-        limit: 9999999,
+        limit: rateLimitConfig.globalPerMinute(),
       },
     ]),
+
+    SecurityModule,
 
     UsersModule,
     AuthModule,
@@ -79,8 +110,6 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     MediaModule,
     BusinessProfessionalsModule,
     BusinessManagersModule,
-    BusinessProfessionalsModule,
-    BusinessManagersModule,
     FilesModule,
     AddressesModule,
     ServicesLocationModule,
@@ -94,9 +123,24 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    // v5.0.0-16.2.1: log de auditoria de todas as requisições.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+    // v5.0.0-15.3.1: nenhum dado sensível sai em respostas.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SensitiveDataInterceptor,
+    },
     FilesService,
     ViaCepService,
     CnpjLookupService,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // v5.0.0-3.5.1: verificação de origem em toda requisição que altera estado.
+    consumer.apply(OriginCheckMiddleware).forRoutes('*');
+  }
+}

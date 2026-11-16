@@ -8,12 +8,33 @@ export class WhatsappService implements OnModuleInit {
   private isReady = false;
   private readonly logger = new Logger(WhatsappService.name);
 
+  /**
+   * v5.0.0-15.2.5: o cliente de WhatsApp executa um navegador Chromium, o que
+   * a especificação de segurança classifica como funcionalidade perigosa.
+   * Por isso:
+   *  - fica desligado por padrão e só sobe com WHATSAPP_ENABLED=true;
+   *  - o sandbox do Chromium permanece ativo. A opção --no-sandbox só é
+   *    aplicada com WHATSAPP_CHROMIUM_NO_SANDBOX=true, para contêineres
+   *    dedicados a este componente, isolados da API.
+   */
   onModuleInit() {
+    if (process.env.WHATSAPP_ENABLED !== 'true') {
+      this.logger.log(
+        'Integração com WhatsApp desligada (WHATSAPP_ENABLED != true).',
+      );
+      return;
+    }
+
+    const chromiumArgs =
+      process.env.WHATSAPP_CHROMIUM_NO_SANDBOX === 'true'
+        ? ['--no-sandbox', '--disable-setuid-sandbox']
+        : [];
+
     this.client = new Client({
       authStrategy: new LocalAuth({ clientId: 'zello-backend' }),
       puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: chromiumArgs,
       },
     });
 

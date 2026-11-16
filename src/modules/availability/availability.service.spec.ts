@@ -19,6 +19,8 @@ describe('AvailabilityService', () => {
   let catalogService: any;
   let appointmentsService: any;
   let shiftQb: any;
+  let tenantAccess: any;
+  const manager = { id: 'u1', email: 'a@b.com', roles: ['manager'] };
 
   beforeEach(() => {
     shiftQb = {
@@ -71,6 +73,14 @@ describe('AvailabilityService', () => {
       cancelAppointment: jest.fn().mockResolvedValue(undefined),
     };
 
+    tenantAccess = {
+      isAdmin: jest.fn().mockReturnValue(false),
+      managesBusiness: jest.fn().mockResolvedValue(true),
+      assertManagesBusiness: jest.fn().mockResolvedValue(undefined),
+      managesProfessional: jest.fn().mockResolvedValue(true),
+      isProfessionalOfLink: jest.fn().mockResolvedValue(false),
+    } as any;
+
     service = new AvailabilityService(
       operatingHourRepo,
       shiftRepo,
@@ -81,6 +91,7 @@ describe('AvailabilityService', () => {
       businessRepo,
       catalogService,
       appointmentsService,
+      tenantAccess,
     );
   });
 
@@ -128,7 +139,7 @@ describe('AvailabilityService', () => {
         dayOfWeek: 1,
         startTime: '09:00',
         endTime: '17:00',
-      }),
+      }, manager),
     ).rejects.toThrow(BadRequestException);
 
     shiftRepo.manager.findOne.mockResolvedValue({
@@ -142,7 +153,7 @@ describe('AvailabilityService', () => {
         dayOfWeek: 1,
         startTime: '09:00',
         endTime: '17:00',
-      }),
+      }, manager),
     ).rejects.toThrow(BadRequestException);
 
     operatingHourRepo.findOne.mockResolvedValue({
@@ -155,7 +166,7 @@ describe('AvailabilityService', () => {
       dayOfWeek: 1,
       startTime: '08:00',
       endTime: '17:00',
-    });
+    }, manager);
     expect(shift.startTime).toBe('09:00:00');
     expect(shift.endTime).toBe('17:00:00');
   });

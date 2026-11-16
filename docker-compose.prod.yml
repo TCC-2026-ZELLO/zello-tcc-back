@@ -7,8 +7,9 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
+    # O banco só aceita conexões da própria máquina (v5.0.0-13.x).
     ports:
-      - '5433:5432'
+      - '127.0.0.1:5433:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -26,6 +27,7 @@ services:
       - DB_HOST=db-tcc
       - DB_PORT=5432
       - PORT=3001
+      - NODE_ENV=production
     restart: always
     ports:
       - '3001:3001'

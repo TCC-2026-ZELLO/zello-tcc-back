@@ -1,7 +1,6 @@
 import {
   IsEmail,
   IsNotEmpty,
-  MinLength,
   Equals,
   IsString,
   Matches,
@@ -16,6 +15,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsCpf } from '../../../common/validators/is-cpf.validator';
 import { IsCnpj } from '../../../common/validators/is-cnpj.validator';
+import { IsAcceptablePassword } from '../../../common/security/password-policy';
 
 export class CreateUserDto {
   @ApiProperty({
@@ -24,6 +24,7 @@ export class CreateUserDto {
   })
   @IsString({ message: 'O nome deve ser um texto válido.' })
   @IsNotEmpty({ message: 'O nome é obrigatório.' })
+  @MaxLength(120, { message: 'O nome deve ter no máximo 120 caracteres.' })
   nome!: string;
 
   @ApiProperty({
@@ -32,6 +33,7 @@ export class CreateUserDto {
   })
   @IsEmail({}, { message: 'O e-mail informado é inválido.' })
   @IsNotEmpty({ message: 'O e-mail é obrigatório.' })
+  @MaxLength(254, { message: 'O e-mail deve ter no máximo 254 caracteres.' })
   email!: string;
 
   @ApiProperty({
@@ -42,11 +44,7 @@ export class CreateUserDto {
   })
   @IsNotEmpty({ message: 'A senha é obrigatória.' })
   @IsString()
-  @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres.' })
-  @Matches(/(?=.*\d)(?=.*\W+)(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message:
-      'A senha é muito fraca. Ela deve conter letras maiúsculas, números e caracteres especiais.',
-  })
+  @IsAcceptablePassword()
   password!: string;
 
   @ApiProperty({
@@ -119,6 +117,7 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'PROFISSIONAL')
   @IsString()
   @IsNotEmpty({ message: 'A especialidade é obrigatória.' })
+  @MaxLength(120)
   specialty?: string;
 
   @ApiProperty({
@@ -152,6 +151,7 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'A razão social é obrigatória.' })
+  @MaxLength(160)
   legalName?: string;
 
   @ApiProperty({
@@ -162,6 +162,7 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsOptional()
   @IsString()
+  @MaxLength(160)
   tradeName?: string;
 
   @ApiProperty({
@@ -172,6 +173,9 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsOptional()
   @IsString()
+  @Matches(/^\d{10,11}$/, {
+    message: 'O telefone do estabelecimento deve ter 10 ou 11 dígitos.',
+  })
   businessPhone?: string;
 
   // === Establishment address fields ===
@@ -182,7 +186,7 @@ export class CreateUserDto {
   })
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsNotEmpty({ message: 'O CEP é obrigatório.' })
-  @Length(8, 8, { message: 'O CEP deve ter exatamente 8 dígitos.' })
+  @Matches(/^\d{8}$/, { message: 'O CEP deve ter exatamente 8 dígitos.' })
   zipCode?: string;
 
   @ApiProperty({
@@ -193,6 +197,7 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'O logradouro é obrigatório.' })
+  @MaxLength(160)
   street?: string;
 
   @ApiProperty({
@@ -203,6 +208,7 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'O número é obrigatório.' })
+  @MaxLength(20)
   addressNumber?: string;
 
   @ApiProperty({
@@ -212,6 +218,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   complement?: string;
 
   @ApiProperty({
@@ -222,6 +229,7 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'O bairro é obrigatório.' })
+  @MaxLength(120)
   neighborhood?: string;
 
   @ApiProperty({
@@ -232,6 +240,7 @@ export class CreateUserDto {
   @ValidateIf((o) => o.accountType === 'ESTABELECIMENTO')
   @IsString()
   @IsNotEmpty({ message: 'A cidade é obrigatória.' })
+  @MaxLength(120)
   city?: string;
 
   @ApiProperty({
@@ -252,7 +261,7 @@ export class CreateUserDto {
   })
   @ValidateIf((o) => o.accountType === 'CLIENTE' && o.clientZipCode)
   @IsOptional()
-  @Length(8, 8, { message: 'O CEP deve ter exatamente 8 dígitos.' })
+  @Matches(/^\d{8}$/, { message: 'O CEP deve ter exatamente 8 dígitos.' })
   clientZipCode?: string;
 
   @ApiProperty({
@@ -262,6 +271,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(160)
   clientStreet?: string;
 
   @ApiProperty({
@@ -271,6 +281,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(20)
   clientNumber?: string;
 
   @ApiProperty({
@@ -280,6 +291,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   clientComplement?: string;
 
   @ApiProperty({
@@ -289,6 +301,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   clientNeighborhood?: string;
 
   @ApiProperty({
@@ -298,6 +311,7 @@ export class CreateUserDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   clientCity?: string;
 
   @ApiProperty({

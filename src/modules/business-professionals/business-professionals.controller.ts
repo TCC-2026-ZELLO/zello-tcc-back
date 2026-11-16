@@ -31,6 +31,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { SucessInterceptor } from '../../common/interceptors/success-interceptor';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
+import { ExposeContactData } from '../../common/security/sensitive-data.interceptor';
 
 @ApiTags('business-management')
 @ApiBearerAuth()
@@ -57,6 +58,22 @@ export class BusinessProfessionalsController {
     @Body() dto: CreateBusinessProfessionalDto,
   ) {
     return this.bpService.create(dto, req.user.id);
+  }
+
+  @Get('business/:businessId/team')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('manager', 'admin')
+  @ExposeContactData()
+  @ApiOperation({
+    summary: 'Listar a equipe com contatos (gestor do estabelecimento)',
+    description:
+      'Versão restrita da listagem de profissionais, com o e-mail de cada membro. Só o gestor do próprio estabelecimento ou um administrador têm acesso (v5.0.0-8.4.1).',
+  })
+  findTeam(
+    @Request() req: { user: ActiveUser },
+    @Param('businessId', ParseUUIDPipe) businessId: string,
+  ) {
+    return this.bpService.findTeamForManager(businessId, req.user);
   }
 
   @Get('business/:businessId')
@@ -116,10 +133,11 @@ export class BusinessProfessionalsController {
     description: 'Status do vínculo atualizado com sucesso.',
   })
   update(
+    @Request() req: { user: ActiveUser },
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateBusinessProfessionalDto,
   ) {
-    return this.bpService.update(id, dto);
+    return this.bpService.update(id, dto, req.user);
   }
 
   @Delete(':id')
@@ -139,8 +157,11 @@ export class BusinessProfessionalsController {
     status: 200,
     description: 'Profissional desvinculado com sucesso.',
   })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.bpService.remove(id);
+  remove(
+    @Request() req: { user: ActiveUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.bpService.remove(id, req.user);
   }
 
   @Get(':id/services')
@@ -181,10 +202,15 @@ export class BusinessProfessionalsController {
     description: 'Serviços do profissional sincronizados com sucesso.',
   })
   updateServices(
+    @Request() req: { user: ActiveUser },
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProfessionalServicesDto,
   ) {
-    return this.bpService.updateProfessionalServices(id, dto.serviceIds);
+    return this.bpService.updateProfessionalServices(
+      id,
+      dto.serviceIds,
+      req.user,
+    );
   }
 
   @Get(':id/shifts')
@@ -225,9 +251,10 @@ export class BusinessProfessionalsController {
     description: 'Turnos do profissional sincronizados com sucesso.',
   })
   updateShifts(
+    @Request() req: { user: ActiveUser },
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProfessionalShiftsDto,
   ) {
-    return this.bpService.updateProfessionalShifts(id, dto.shifts);
+    return this.bpService.updateProfessionalShifts(id, dto.shifts, req.user);
   }
 }

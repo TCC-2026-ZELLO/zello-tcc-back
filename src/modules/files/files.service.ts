@@ -4,8 +4,14 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
+import {
+  UPLOAD_FOLDERS,
+  UploadFolder,
+  UploadKind,
+  validateUploadedFile,
+} from '../../common/upload/file-validation';
 
 export interface MulterFile {
   originalname: string;
@@ -45,21 +51,40 @@ export class FilesService {
     });
   }
 
-  async uploadPublicFile(file: MulterFile, folder: string): Promise<string> {
+  /**
+   * Valida e grava um arquivo enviado pelo usuário.
+   *
+   * - v5.0.0-5.2.1 / 5.2.2: tamanho, extensão, MIME declarado e assinatura do
+   *   conteúdo (magic bytes) são conferidos antes de qualquer gravação.
+   * - v5.0.0-5.3.2: o nome do blob é gerado internamente (UUID v4 + extensão
+   *   derivada do conteúdo real). O nome enviado pelo cliente nunca compõe o
+   *   caminho, o que elimina path traversal e sobrescrita de arquivos.
+   * - v5.0.0-5.3.1: o destino é um armazenamento de objetos, sem execução de
+   *   código, e o Content-Type gravado é o detectado, não o declarado.
+   */
+  async uploadPublicFile(
+    file: MulterFile,
+    folder: string,
+    kind: UploadKind = 'image',
+  ): Promise<string> {
     if (!file || !file.buffer) {
       throw new BadRequestException('Arquivo de imagem inválido ou ausente.');
     }
+    if (!(UPLOAD_FOLDERS as readonly string[]).includes(folder)) {
+      throw new BadRequestException('Destino de upload inválido.');
+    }
+
+    const detected = validateUploadedFile(file, kind);
 
     try {
-      const safeName = file.originalname
-        .replace(/\s+/g, '-')
-        .replace(/[^a-zA-Z0-9.\-_]/g, '');
-
-      const fileName = `${folder}/${uuidv4()}-${safeName}`;
+      const fileName = `${folder as UploadFolder}/${randomUUID()}.${detected.extension}`;
       const blockBlobClient = this.containerClient.getBlockBlobClient(fileName);
 
       await blockBlobClient.uploadData(file.buffer, {
-        blobHTTPHeaders: { blobContentType: file.mimetype },
+        blobHTTPHeaders: {
+          blobContentType: detected.mime,
+          blobCacheControl: 'public, max-age=31536000, immutable',
+        },
       });
 
       this.logger.log(`Arquivo salvo no Azure: ${fileName}`);
@@ -78,16 +103,24 @@ export class FilesService {
 
   async deleteFile(fileUrl: string): Promise<void> {
     try {
-      const urlParts = fileUrl.split(`/${this.containerName}/`);
+      // Só apaga blobs do próprio contêiner da aplicação: a URL precisa ter o
+      // mesmo host do armazenamento configurado e nenhuma travessia de caminho.
+      const containerUrl = new URL(this.containerClient.url);
+      const target = new URL(fileUrl);
+      if (target.host !== containerUrl.host) return;
+
+      const urlParts = target.pathname.split(`/${this.containerName}/`);
       if (urlParts.length < 2) return;
 
       const blobName = decodeURIComponent(urlParts[1]);
+      if (blobName.includes('..') || blobName.startsWith('/')) return;
+
       const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
 
       await blockBlobClient.deleteIfExists();
       this.logger.log(`Arquivo removido do Azure: ${blobName}`);
     } catch {
-      this.logger.warn(`Erro ao deletar arquivo no Azure: ${fileUrl}`);
+      this.logger.warn('Erro ao deletar arquivo no Azure.');
     }
   }
 }

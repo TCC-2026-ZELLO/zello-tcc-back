@@ -1,0 +1,11 @@
+# v5.0.0-13.3.1: exceções revisadas do Gitleaks (falsos positivos, não são segredos).
+# Cada entrada é a "Fingerprint" impressa pelo Gitleaks: <commit>:<arquivo>:<regra>:<linha>.
+# Revisado em 15/11/2026.
+
+# Segredo fictício de teste unitário do JWT (só existe no Jest, nunca em ambiente real).
+88f1b6fe245ddfd9e6d0712dfced316944af4bdd:src/modules/auth/auth.service.spec.ts:generic-api-key:13
+
+# Token público do badge do CircleCI copiado do README padrão do NestJS
+# (pertence ao projeto nestjs/nest, não ao Zello; README já reescrito).
+85d94159700e3cd7660396c318c46c6a1e6e77d6:README.md:generic-api-key:5
+4be0f2751861ca2ee2b1d9a7ef6dc171a572013d:README.md:generic-api-key:5

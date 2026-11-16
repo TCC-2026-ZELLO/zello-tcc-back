@@ -10,6 +10,7 @@ import {
   Request,
   ValidationPipe,
   UsePipes,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -78,7 +79,7 @@ export class ReviewsController {
     status: 200,
     description: 'Lista de avaliações do profissional retornada com sucesso.',
   })
-  findByProfessional(@Param('id') professionalId: string) {
+  findByProfessional(@Param('id', ParseUUIDPipe) professionalId: string) {
     return this.reviewsService.findByProfessional(professionalId);
   }
 
@@ -97,7 +98,7 @@ export class ReviewsController {
     status: 200,
     description: 'Lista de avaliações do estabelecimento retornada com sucesso.',
   })
-  findByBusiness(@Param('id') businessId: string) {
+  findByBusiness(@Param('id', ParseUUIDPipe) businessId: string) {
     return this.reviewsService.findByBusiness(businessId);
   }
 
@@ -118,7 +119,7 @@ export class ReviewsController {
     status: 200,
     description: 'Avaliações do agendamento retornadas com sucesso.',
   })
-  findByAppointment(@Param('id') appointmentId: string, @Request() req) {
+  findByAppointment(@Param('id', ParseUUIDPipe) appointmentId: string, @Request() req) {
     return this.reviewsService.findByAppointment(appointmentId, req.user.id);
   }
 
@@ -176,8 +177,8 @@ export class ReviewsController {
     status: 200,
     description: 'Avaliações recebidas pela empresa retornadas com sucesso.',
   })
-  findReceivedByBusiness(@Param('id') businessId: string, @Request() req) {
-    return this.reviewsService.findReceivedByBusiness(businessId);
+  findReceivedByBusiness(@Param('id', ParseUUIDPipe) businessId: string, @Request() req) {
+    return this.reviewsService.findReceivedByBusiness(businessId, req.user);
   }
 
   @Post(':id/response')
@@ -201,7 +202,7 @@ export class ReviewsController {
     description: 'Resposta à avaliação publicada com sucesso.',
   })
   respond(
-    @Param('id') reviewId: string,
+    @Param('id', ParseUUIDPipe) reviewId: string,
     @Body() dto: CreateReviewResponseDto,
     @Request() req: { user: ActiveUser },
   ) {
@@ -229,7 +230,7 @@ export class ReviewsController {
     description: 'Resposta da avaliação atualizada com sucesso.',
   })
   updateResponse(
-    @Param('id') reviewId: string,
+    @Param('id', ParseUUIDPipe) reviewId: string,
     @Body() dto: UpdateReviewResponseDto,
     @Request() req: { user: ActiveUser },
   ) {
@@ -255,7 +256,7 @@ export class ReviewsController {
     description: 'Resposta removida com sucesso.',
   })
   removeResponse(
-    @Param('id') reviewId: string,
+    @Param('id', ParseUUIDPipe) reviewId: string,
     @Request() req: { user: ActiveUser },
   ) {
     return this.reviewsService.removeReviewResponse(reviewId, req.user);

@@ -44,7 +44,7 @@ describe('DatabaseExceptionFilter', () => {
     });
   });
 
-  it('should return 500 with errorDump when NODE_ENV is not production', () => {
+  it('should return a generic 500 without driver details outside production (v5.0.0-16.5.1)', () => {
     const prevEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
 
@@ -63,7 +63,6 @@ describe('DatabaseExceptionFilter', () => {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Erro interno no banco de dados.',
       path: '/test-url',
-      errorDump: exception.message,
     });
 
     process.env.NODE_ENV = prevEnv;

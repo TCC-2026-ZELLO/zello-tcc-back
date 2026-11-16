@@ -7,6 +7,7 @@ import { UsersService } from './users.service';
 import { AuthProvider, User } from './entities/user.entity';
 import { Role } from './entities/role.entity';
 import * as bcrypt from 'bcrypt';
+import { RefreshToken } from './entities/refresh-token.entity';
 
 jest.mock('bcrypt');
 
@@ -16,9 +17,11 @@ describe('UsersService', () => {
   let rolesRepo: any;
   let filesService: any;
   let emMock: any;
+  let sessionRepo: any;
 
   beforeEach(() => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
+    sessionRepo = { delete: jest.fn().mockResolvedValue({ affected: 1 }) };
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-pwd');
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
@@ -44,7 +47,11 @@ describe('UsersService', () => {
         return null;
       }),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
-      getRepository: jest.fn().mockReturnValue(userRepoInTx),
+      getRepository: jest
+        .fn()
+        .mockImplementation((entity) =>
+          entity === RefreshToken ? sessionRepo : userRepoInTx,
+        ),
     };
 
     const qbMock = {
@@ -108,6 +115,7 @@ describe('UsersService', () => {
       expect(filesService.uploadPublicFile).toHaveBeenCalledWith(
         expect.anything(),
         'client-photos',
+        'image',
       );
       expect(res.id).toBe('u1');
     });
@@ -146,10 +154,12 @@ describe('UsersService', () => {
       expect(filesService.uploadPublicFile).toHaveBeenCalledWith(
         expect.anything(),
         'avatars',
+        'image',
       );
       expect(filesService.uploadPublicFile).toHaveBeenCalledWith(
         expect.anything(),
         'business-photos',
+        'image',
       );
     });
 
@@ -269,6 +279,47 @@ describe('UsersService', () => {
       expect(updated.name).toBe('New Name');
       expect(updated.email).toBe('new@zello.com');
       expect(updated.roles).toEqual(['client']);
+      // v5.0.0-7.4.3: a troca de senha encerra as sessões do usuário.
+      expect(sessionRepo.delete).toHaveBeenCalledWith({ user: { id: 'u1' } });
+    });
+
+    it('should require the current password to change the e-mail (v5.0.0-7.5.1)', async () => {
+      const account = { id: 'u1', name: 'A', email: 'old@zello.com', roles: [] };
+      usersRepo.findOne
+        .mockResolvedValueOnce(account)
+        .mockResolvedValueOnce({ id: 'u1', passwordHash: 'hash' });
+      await expect(
+        service.update('u1', { email: 'new@zello.com' }, { requesterId: 'u1' }),
+      ).rejects.toThrow('A senha atual é necessária para alterar o e-mail.');
+
+      (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+      usersRepo.findOne
+        .mockResolvedValueOnce(account)
+        .mockResolvedValueOnce({ id: 'u1', passwordHash: 'hash' });
+      await expect(
+        service.update(
+          'u1',
+          { email: 'new@zello.com', currentPassword: 'errada' },
+          { requesterId: 'u1' },
+        ),
+      ).rejects.toThrow('A senha atual informada está incorreta.');
+    });
+
+    it('should revoke sessions on deactivation and keep the current one on request', async () => {
+      usersRepo.findOne.mockResolvedValue({ id: 'u1' });
+      usersRepo.update = jest.fn().mockResolvedValue({});
+      expect(await service.setActive('u1', false)).toEqual({
+        id: 'u1',
+        isActive: false,
+      });
+      expect(sessionRepo.delete).toHaveBeenCalledWith({ user: { id: 'u1' } });
+
+      sessionRepo.delete.mockClear();
+      await service.setActive('u1', true);
+      expect(sessionRepo.delete).not.toHaveBeenCalled();
+
+      await service.revokeSessions('u1', 's1');
+      expect(sessionRepo.delete.mock.calls[0][0].id).toBeDefined();
     });
 
     it('should throw UnauthorizedException or ConflictException on invalid update conditions', async () => {
@@ -302,6 +353,8 @@ describe('UsersService', () => {
       usersRepo.findOne.mockResolvedValue({ id: 'u1' });
       const res = await service.remove('u1');
       expect(usersRepo.softDelete).toHaveBeenCalledWith('u1');
+      // v5.0.0-7.4.2: conta excluída perde as sessões.
+      expect(sessionRepo.delete).toHaveBeenCalledWith({ user: { id: 'u1' } });
       expect(res).toEqual({ message: 'Usuário excluído com sucesso.' });
     });
 

@@ -478,9 +478,9 @@ describe('AppointmentsService', () => {
         dateTo: '2026-01-31',
         professionalId: 'p1',
       });
-      await service.findAll('u1', { date: '2026-01-01' });
-      await service.findAll('u1', { dateFrom: '2026-01-01' });
-      await service.findAll('u1', { dateTo: '2026-01-31' });
+      await service.findAll('u1', { businessId: 'b1', date: '2026-01-01' });
+      await service.findAll('u1', { businessId: 'b1', dateFrom: '2026-01-01' });
+      await service.findAll('u1', { businessId: 'b1', dateTo: '2026-01-31' });
 
       mockAppointmentRepo.findOne.mockResolvedValue({
         id: 'a1',

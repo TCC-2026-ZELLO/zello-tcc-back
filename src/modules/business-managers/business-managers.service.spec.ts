@@ -21,7 +21,13 @@ describe('BusinessManagersService', () => {
     managerRepo = {
       findOne: jest.fn(),
     };
-    service = new BusinessManagersService(bmRepo, managerRepo);
+    service = new BusinessManagersService(bmRepo, managerRepo, {
+      isAdmin: jest.fn().mockReturnValue(false),
+      managesBusiness: jest.fn().mockResolvedValue(true),
+      assertManagesBusiness: jest.fn().mockResolvedValue(undefined),
+      managesProfessional: jest.fn().mockResolvedValue(true),
+      isProfessionalOfLink: jest.fn().mockResolvedValue(false),
+    } as any);
   });
 
   it('should create link as admin or authorized manager', async () => {

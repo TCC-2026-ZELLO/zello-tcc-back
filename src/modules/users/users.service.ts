@@ -1,11 +1,13 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, Not, Repository } from 'typeorm';
+import { RefreshToken } from './entities/refresh-token.entity';
 import { AuthProvider, User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -30,6 +32,8 @@ import { FilesService } from '../files/files.service';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
@@ -42,6 +46,35 @@ export class UsersService {
 
   async onModuleInit() {
     await this.seedRoles();
+    await this.bootstrapAdmin();
+  }
+
+  /**
+   * v5.0.0-6.3.2: não existe conta administrativa padrão nem senha de fábrica.
+   * O primeiro administrador é uma conta comum, já cadastrada pelo fluxo
+   * normal, cujo e-mail é informado em BOOTSTRAP_ADMIN_EMAIL. Depois disso,
+   * novos administradores só são promovidos por outro administrador.
+   */
+  private async bootstrapAdmin() {
+    const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+    if (!email) return;
+    try {
+      const user = await this.findByEmailWithPassword(email);
+      if (!user) {
+        this.logger.warn(
+          'BOOTSTRAP_ADMIN_EMAIL definido, mas a conta ainda não foi cadastrada.',
+        );
+        return;
+      }
+      if (user.roles?.some((role) => role.name === 'admin')) return;
+      await this.become_admin(user.id);
+      this.logger.log(`Papel admin concedido por bootstrap a userId=${user.id}`);
+    } catch (error) {
+      this.logger.error(
+        'Falha ao aplicar BOOTSTRAP_ADMIN_EMAIL',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   private async seedRoles() {
@@ -55,7 +88,7 @@ export class UsersService {
       if (!exists) {
         const newRole = this.rolesRepository.create({ name: roleName });
         await this.rolesRepository.save(newRole);
-        console.log(`[Seed]: Role '${roleName}' criada com sucesso.`);
+        this.logger.log(`Role '${roleName}' criada.`);
       }
     }
   }
@@ -68,16 +101,24 @@ export class UsersService {
           ? 'manager'
           : 'client';
 
+    // O arquivo só é enviado ao armazenamento depois que as credenciais foram
+    // conferidas, para que uma requisição anônima inválida não deixe arquivos
+    // órfãos no bucket.
     let photoUrl: string | null = null;
-    if (photo) {
+    const uploadPhoto = async () => {
+      if (!photo) return;
       const folder =
         createUserDto.accountType === 'ESTABELECIMENTO'
           ? 'business-photos'
           : createUserDto.accountType === 'PROFISSIONAL'
             ? 'avatars'
             : 'client-photos';
-      photoUrl = await this.filesService.uploadPublicFile(photo as any, folder);
-    }
+      photoUrl = await this.filesService.uploadPublicFile(
+        photo as any,
+        folder,
+        'image',
+      );
+    };
 
     const userExistente = await this.findByEmailWithPassword(
       createUserDto.email,
@@ -100,6 +141,8 @@ export class UsersService {
           'As credenciais fornecidas são inválidas ou o e-mail não está disponível para um cadastro de senha.',
         );
       }
+
+      await uploadPhoto();
 
       return await this.usersRepository.manager.transaction(
         async (em: EntityManager) => {
@@ -139,6 +182,8 @@ export class UsersService {
 
     const saltRounds = 10;
     const hash = await bcrypt.hash(createUserDto.password, saltRounds);
+
+    await uploadPhoto();
 
     return await this.usersRepository.manager.transaction(
       async (em: EntityManager) => {
@@ -297,8 +342,47 @@ export class UsersService {
     });
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto) {
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto,
+    context: {
+      requesterId?: string;
+      requesterIsAdmin?: boolean;
+      currentSessionId?: string;
+    } = {},
+  ) {
     const user = await this.findOne(id);
+    const actingOnOwnAccount =
+      !context.requesterId || context.requesterId === id;
+    let passwordChanged = false;
+
+    // v5.0.0-7.5.1: trocar o e-mail de acesso exige reautenticação com a senha
+    // atual (contas locais). Um administrador alterando a conta de terceiros
+    // já passou pela autorização de papel.
+    const emailChanging =
+      !!updateUserDto.email && updateUserDto.email !== user.email;
+    if (emailChanging && actingOnOwnAccount && !updateUserDto.password) {
+      const withHash = await this.usersRepository.findOne({
+        where: { id },
+        select: ['id', 'passwordHash'],
+      });
+      if (withHash?.passwordHash) {
+        if (!updateUserDto.currentPassword) {
+          throw new UnauthorizedException(
+            'A senha atual é necessária para alterar o e-mail.',
+          );
+        }
+        const ok = await bcrypt.compare(
+          updateUserDto.currentPassword,
+          withHash.passwordHash,
+        );
+        if (!ok) {
+          throw new UnauthorizedException(
+            'A senha atual informada está incorreta.',
+          );
+        }
+      }
+    }
 
     if (updateUserDto.password) {
       if (!updateUserDto.currentPassword) {
@@ -328,6 +412,7 @@ export class UsersService {
         );
       }
       user.passwordHash = await bcrypt.hash(updateUserDto.password, 10);
+      passwordChanged = true;
     }
 
     if (updateUserDto.nome) user.name = updateUserDto.nome;
@@ -347,6 +432,15 @@ export class UsersService {
 
     const userAtualizado = await this.usersRepository.save(user);
 
+    // v5.0.0-7.4.3: após a troca de senha, todas as outras sessões do usuário
+    // são encerradas; só a sessão que fez a troca continua válida.
+    if (passwordChanged) {
+      await this.revokeSessions(
+        id,
+        actingOnOwnAccount ? context.currentSessionId : undefined,
+      );
+    }
+
     const userWithoutPasswordUpdated = omitPasswordHash(userAtualizado);
 
     return {
@@ -358,9 +452,29 @@ export class UsersService {
   async remove(id: string) {
     await this.findOne(id);
 
+    // v5.0.0-14.2.4: exclusão lógica, o registro é preservado para auditoria.
     await this.usersRepository.softDelete(id);
+    // v5.0.0-7.4.2: conta excluída perde todas as sessões na mesma operação.
+    await this.revokeSessions(id);
 
     return { message: 'Usuário excluído com sucesso.' };
+  }
+
+  /** Encerra sessões do usuário; `exceptSessionId` preserva a sessão atual. */
+  async revokeSessions(id: string, exceptSessionId?: string) {
+    const repo = this.usersRepository.manager.getRepository(RefreshToken);
+    const result = exceptSessionId
+      ? await repo.delete({ user: { id }, id: Not(exceptSessionId) })
+      : await repo.delete({ user: { id } });
+    return { revoked: result.affected ?? 0 };
+  }
+
+  /** Ativa ou desativa a conta; desativar encerra as sessões (v5.0.0-7.4.2). */
+  async setActive(id: string, isActive: boolean) {
+    await this.findOne(id);
+    await this.usersRepository.update(id, { isActive });
+    if (!isActive) await this.revokeSessions(id);
+    return { id, isActive };
   }
 
   async findByEmailWithPassword(email: string): Promise<User | null> {
@@ -376,6 +490,7 @@ export class UsersService {
         'user.email',
         'user.passwordHash',
         'user.provider',
+        'user.isActive',
         'roles.id',
         'roles.name',
       ])

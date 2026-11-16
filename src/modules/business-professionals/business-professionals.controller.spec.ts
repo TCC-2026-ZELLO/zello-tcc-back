@@ -38,15 +38,15 @@ describe('BusinessProfessionalsController', () => {
     ).toEqual({ id: 'bp1' });
     expect(await controller.findAllByBusiness('b1')).toEqual([]);
     expect(await controller.findOne('bp1')).toEqual({ id: 'bp1' });
-    expect(await controller.update('bp1', { active: true })).toEqual({
+    expect(await controller.update(req, 'bp1', { active: true })).toEqual({
       id: 'bp1',
     });
-    expect(await controller.remove('bp1')).toEqual({ message: 'ok' });
+    expect(await controller.remove(req, 'bp1')).toEqual({ message: 'ok' });
     expect(await controller.findServices('bp1')).toEqual([]);
     expect(
-      await controller.updateServices('bp1', { serviceIds: ['s1'] }),
+      await controller.updateServices(req, 'bp1', { serviceIds: ['s1'] }),
     ).toEqual([]);
     expect(await controller.findShifts('bp1')).toEqual([]);
-    expect(await controller.updateShifts('bp1', { shifts: [] })).toEqual([]);
+    expect(await controller.updateShifts(req, 'bp1', { shifts: [] })).toEqual([]);
   });
 });

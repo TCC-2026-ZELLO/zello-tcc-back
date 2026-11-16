@@ -19,6 +19,7 @@ import { Business } from '../businesses/entities/business.entity';
 import { Manager } from '../profiles/managers/entities/manager.entity';
 import { BusinessManager } from '../business-managers/entities/business-manager.entity';
 import { ActiveUser } from '../auth/interfaces/active-user.interface';
+import { escapeHtml } from '../../common/security/html-escape';
 
 const REVIEW_RESPONSE_RELATIONS = [
   'client',
@@ -168,7 +169,21 @@ export class ReviewsService {
     });
   }
 
-  async findReceivedByBusiness(businessId: string): Promise<Review[]> {
+  async findReceivedByBusiness(
+    businessId: string,
+    requester?: ActiveUser,
+  ): Promise<Review[]> {
+    // v5.0.0-8.4.1: o painel de avaliações recebidas é do gestor do próprio
+    // estabelecimento.
+    if (
+      requester &&
+      !requester.roles?.includes('admin') &&
+      !(await this.isManagerOfBusiness(requester.id, businessId))
+    ) {
+      throw new ForbiddenException(
+        'Você não tem permissão para acessar as avaliações deste estabelecimento.',
+      );
+    }
     return this.reviewRepo.find({
       where: { business: { id: businessId }, targetType: ReviewTargetType.BUSINESS },
       relations: ['client', 'appointment', 'responseAuthor'],
@@ -347,6 +362,7 @@ export class ReviewsService {
   }
 
   /** CA3 - Notifica por e-mail o cliente autor do comentário sobre a nova resposta. */
+  // v5.0.0-1.2.1: todo dado do usuário inserido no HTML do e-mail é codificado.
   private async notifyClientOfNewResponse(review: Review): Promise<void> {
     const client = review.client;
 
@@ -364,12 +380,12 @@ export class ReviewsService {
         html: `
         <div style="font-family: sans-serif; color: #333;">
           <h2>Sua avaliação recebeu uma resposta</h2>
-          <p>Olá, ${client.name}.</p>
-          <p>${responderName} respondeu ao comentário que você deixou no Zello.</p>
+          <p>Olá, ${escapeHtml(client.name)}.</p>
+          <p>${escapeHtml(responderName)} respondeu ao comentário que você deixou no Zello.</p>
           <blockquote style="border-left: 3px solid #007bff; margin: 10px 0; padding-left: 10px; color: #555;">
-            "${review.comment}"
+            "${escapeHtml(review.comment)}"
           </blockquote>
-          <p><strong>Resposta:</strong> ${review.responseText}</p>
+          <p><strong>Resposta:</strong> ${escapeHtml(review.responseText)}</p>
           <p>Acesse o app para ver os detalhes.</p>
         </div>
       `,

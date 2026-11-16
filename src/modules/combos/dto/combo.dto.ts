@@ -5,6 +5,7 @@ import {
 } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
@@ -15,6 +16,7 @@ import {
   IsUUID,
   Max,
   Min,
+  MaxLength,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -50,6 +52,7 @@ export class CreateComboDto {
   })
   @IsString()
   @MinLength(3)
+  @MaxLength(120)
   name: string;
 
   @ApiPropertyOptional({
@@ -59,6 +62,7 @@ export class CreateComboDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(1000)
   description?: string;
 
   @ApiProperty({
@@ -87,6 +91,7 @@ export class CreateComboDto {
   })
   @IsArray()
   @ArrayMinSize(2, { message: 'Um combo precisa de pelo menos dois serviços.' })
+  @ArrayMaxSize(20, { message: 'Um combo pode ter no máximo 20 serviços.' })
   @ValidateNested({ each: true })
   @Type(() => ComboItemDto)
   items: ComboItemDto[];

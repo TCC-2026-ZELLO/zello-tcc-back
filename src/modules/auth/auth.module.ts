@@ -11,6 +11,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { RefreshToken } from '../users/entities/refresh-token.entity';
 import { PasswordReset } from '../users/entities/password-reset.entity';
+import { LoginAttemptLimiter } from './login-attempt.limiter';
+import { JWT_ALGORITHM } from '../../config/security.config';
 
 @Module({
   imports: [
@@ -28,7 +30,9 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
 
         return {
           secret: secret,
-          signOptions: { expiresIn: '1h' },
+          // v5.0.0-9.1.2: um único algoritmo permitido para assinar e verificar.
+          signOptions: { algorithm: JWT_ALGORITHM },
+          verifyOptions: { algorithms: [JWT_ALGORITHM] },
         };
       },
     }),
@@ -76,7 +80,7 @@ import { PasswordReset } from '../users/entities/password-reset.entity';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, LoginAttemptLimiter],
   exports: [AuthService, MailerModule],
 })
 export class AuthModule {}
