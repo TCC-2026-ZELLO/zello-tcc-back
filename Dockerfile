@@ -2,7 +2,7 @@
 # ---------------------------------------------------------
 # ESTÁGIO 1: build (dependências completas + compilação)
 # ---------------------------------------------------------
-FROM node:20-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /usr/src/app
 
 ENV PUPPETEER_SKIP_DOWNLOAD=true
@@ -16,7 +16,7 @@ RUN npm run build
 # ---------------------------------------------------------
 # ESTÁGIO 2: dependências de produção apenas
 # ---------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:25-alpine AS deps
 WORKDIR /usr/src/app
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 COPY package.json package-lock.json ./
@@ -27,7 +27,7 @@ RUN npm ci --omit=dev --no-audit --no-fund --quiet && npm cache clean --force
 # v5.0.0-13.4.1 / 15.2.3: só o código compilado e as dependências de produção.
 # Sem código-fonte TypeScript, testes, .git, .env ou ferramentas de build.
 # ---------------------------------------------------------
-FROM node:20-alpine AS runtime
+FROM node:25-alpine AS runtime
 WORKDIR /usr/src/app
 
 ENV NODE_ENV=production \
